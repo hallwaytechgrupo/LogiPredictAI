@@ -43,8 +43,6 @@ A unidade desta versão é o **pedido**, pois a base não individualiza pacotes 
 | Autenticação, persistência e regras operacionais | Backlog da próxima review |
 | Flutter Web/Mobile e mapa interativo | Planejado |
 
-O aceite acadêmico e as datas de review devem ser registrados pela equipe.
-
 ## 🧰 Tecnologias
 
 | Camada | Tecnologias | Responsabilidade |
@@ -208,7 +206,9 @@ O último comando inicia os serviços, testa a integração com o modelo real e 
 | 2ª review | Regras, autenticação, persistência e validação do modelo | [Backlog](docs/backlog.md) |
 | Etapa seguinte | Flutter Web/Mobile e mapa | Planejamento a refinar |
 
-Calendário, responsáveis por tarefas e aceite das reviews: a definir pela equipe. [Requisitos e histórias de usuário](docs/backlog.md).
+Calendário das sprints 2 e 3, responsáveis por tarefas e aceite das reviews: a definir pela equipe. [Requisitos e histórias de usuário](docs/backlog.md).
+
+Review da Sprint 1 informada para **20/10/2026**. [Cronograma proposto e cartões para o EntregaLab](docs/cronograma-entregalab.md) · [Explicação, testes e evolução do modelo](docs/guia-projeto-e-testes.md) · [Descrição pronta para o PR da Sprint 1](docs/pr-sprint-1.md).
 
 ## 📚 Metodologia
 
@@ -225,11 +225,4 @@ O projeto adota **Scrum**, com backlog priorizado, entregas incrementais, acompa
 | Igor Lima | Desenvolvedor | [@IgorSantosL](https://github.com/IgorSantosL) |
 | Vinicius Lemmes | Desenvolvedor | [@viniilemes](https://github.com/viniilemes) |
 
-**Professor Focal Point:** Leandro Toss Hoffmann. Papéis e participantes preservados do README original; alterações devem ser confirmadas pela equipe.
-
-## 🔗 Referências e créditos
-
-- Dados: [Brazilian E-Commerce Public Dataset by Olist — Kaggle](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce). Respeite os termos da fonte; os CSVs não são distribuídos no Git.
-- Documentação de ML: [scikit-learn](https://scikit-learn.org/stable/).
-- Organização acadêmica inspirada em [Octacode ABP3](https://github.com/octacodeteam/ABP3), [Octacode ABP2](https://github.com/octacodeteam/ABP2), [HallwayTech SkyHawk](https://github.com/hallwaytechgrupo/SkyHawk) e [HallwayTech Boitata](https://github.com/hallwaytechgrupo/Boitata): objetivo, backlog, sprints, tecnologias, equipe e evidências.
-- Licença do código: a definir pelos responsáveis. A licença do dataset não licencia o software.
+**Professor Focal Point:** Leandro Toss Hoffmann.
