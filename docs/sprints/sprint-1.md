@@ -1,6 +1,6 @@
 # Sprint 1 — Ciência de dados, IA e estrutura inicial
 
-**Objetivo:** demonstrar a mineração da Olist, o tratamento dos dados, o treinamento Random Forest e uma previsão acessível por HTTP. Datas e aceite da review: a definir pela equipe. A interface Flutter fica para uma fase posterior.
+**Objetivo:** demonstrar a mineração da Olist, o tratamento dos dados, o treinamento Random Forest e uma previsão acessível por HTTP. Review informada pela equipe para **20/10/2026**; aceite a confirmar na apresentação. A interface Flutter fica para uma fase posterior.
 
 ## Entregas e evidências
 

@@ -1,6 +1,6 @@
 # Base de dados Olist
 
-Fonte: [Brazilian E-Commerce Public Dataset by Olist](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce), versão 2, pedidos brasileiros de 2016 a 2018. A fonte identifica a licença **CC BY-NC-SA 4.0**; consulte os termos na origem antes de redistribuir dados ou derivados. Licença do dataset e licença de software são assuntos separados; a equipe ainda deve definir a licença do código.
+Fonte: [Brazilian E-Commerce Public Dataset by Olist](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce), versão 2, pedidos brasileiros de 2016 a 2018.
 
 Na raiz do projeto, após instalar o ambiente Python:
 
