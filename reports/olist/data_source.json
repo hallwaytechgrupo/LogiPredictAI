@@ -1,0 +1,14 @@
+{
+  "dataset": "olistbr/brazilian-ecommerce",
+  "version": 2,
+  "url": "https://www.kaggle.com/api/v1/datasets/download/olistbr/brazilian-ecommerce?datasetVersionNumber=2",
+  "archive_sha256": "967e41e04fc306fe604e2a693f488995a8b41e5047418f8a5c8e4abd6deca784",
+  "files": [
+    "olist_orders_dataset.csv",
+    "olist_order_items_dataset.csv",
+    "olist_customers_dataset.csv",
+    "olist_sellers_dataset.csv",
+    "olist_products_dataset.csv",
+    "olist_geolocation_dataset.csv"
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "source": "olist",
+  "tables": {
+    "orders": {
+      "input_rows": 99441,
+      "exact_duplicates_removed": 0
+    },
+    "customers": {
+      "input_rows": 99441,
+      "exact_duplicates_removed": 0
+    },
+    "order_items": {
+      "input_rows": 112650,
+      "exact_duplicates_removed": 0
+    },
+    "products": {
+      "input_rows": 32951,
+      "exact_duplicates_removed": 0
+    },
+    "sellers": {
+      "input_rows": 3095,
+      "exact_duplicates_removed": 0
+    },
+    "geolocation": {
+      "input_rows": 1000163,
+      "exact_duplicates_removed": 280009
+    }
+  },
+  "input_orders": 99441,
+  "retained_orders": 96281,
+  "excluded_orders": 3160,
+  "late_rate": 0.06783269804011176,
+  "missing_features": {
+    "distance_km": 480,
+    "total_weight_g": 22,
+    "total_volume_cm3": 16
+  }
+}

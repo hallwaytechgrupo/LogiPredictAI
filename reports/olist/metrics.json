@@ -1,0 +1,134 @@
+{
+  "version": "rf-olist-bc50859e0aa7",
+  "source": "olist",
+  "synthetic": false,
+  "trained_at": "2026-10-20T18:19:54.619170+00:00",
+  "dataset_sha256": "bc50859e0aa786d37a8933b230732bf0196acfc4287d802186f7a78e47dbc3a6",
+  "python_version": "3.13.4",
+  "sklearn_version": "1.7.2",
+  "algorithm": "RandomForestClassifier",
+  "features": [
+    "distance_km",
+    "total_weight_g",
+    "total_volume_cm3",
+    "items_count",
+    "sellers_count",
+    "price",
+    "freight_value",
+    "dispatch_lead_days",
+    "remaining_days",
+    "purchase_month",
+    "dispatch_weekday",
+    "seller_state",
+    "customer_state"
+  ],
+  "seed": 42,
+  "parameters": {
+    "bootstrap": true,
+    "ccp_alpha": 0.0,
+    "class_weight": "balanced_subsample",
+    "criterion": "gini",
+    "max_depth": 16,
+    "max_features": "sqrt",
+    "max_leaf_nodes": null,
+    "max_samples": null,
+    "min_impurity_decrease": 0.0,
+    "min_samples_leaf": 5,
+    "min_samples_split": 2,
+    "min_weight_fraction_leaf": 0.0,
+    "monotonic_cst": null,
+    "n_estimators": 250,
+    "n_jobs": -1,
+    "oob_score": false,
+    "random_state": 42,
+    "verbose": 0,
+    "warm_start": false
+  },
+  "threshold": 0.38999999999999996,
+  "threshold_selection": "max F1 on validation only",
+  "target": "delivered_calendar_date > estimated_calendar_date",
+  "prediction_time": "dispatch",
+  "probability_calibrated": false,
+  "split": {
+    "train": {
+      "rows": 54761,
+      "late_rate": 0.05054692207958218,
+      "dispatch_min": "2016-10-08 10:34:01",
+      "dispatch_max": "2018-03-06 02:23:13",
+      "outcome_max": "2018-03-06 20:15:11"
+    },
+    "validation": {
+      "rows": 17445,
+      "late_rate": 0.08575523072513615,
+      "dispatch_min": "2018-03-06 20:17:57",
+      "dispatch_max": "2018-05-28 15:04:00",
+      "outcome_max": "2018-05-29 11:18:53"
+    },
+    "test": {
+      "rows": 19258,
+      "late_rate": 0.03655623636930107,
+      "dispatch_min": "2018-05-29 12:04:00",
+      "dispatch_max": "2018-09-11 19:48:28",
+      "outcome_max": "2018-10-17 13:22:46"
+    }
+  },
+  "purged_rows": 4817,
+  "validation": {
+    "accuracy": 0.8331327027801663,
+    "precision": 0.23998529952223446,
+    "recall": 0.4364973262032086,
+    "f1": 0.3096988380365189,
+    "average_precision": 0.28512436520063505,
+    "roc_auc": 0.7252772708328653,
+    "brier_score": 0.11018331163472309,
+    "confusion_matrix": [
+      [
+        13881,
+        2068
+      ],
+      [
+        843,
+        653
+      ]
+    ]
+  },
+  "test": {
+    "accuracy": 0.8029390383217364,
+    "precision": 0.12839624909834094,
+    "recall": 0.7585227272727273,
+    "f1": 0.21961752004935226,
+    "average_precision": 0.3692216855078934,
+    "roc_auc": 0.8666915581790744,
+    "brier_score": 0.101813061359933,
+    "confusion_matrix": [
+      [
+        14929,
+        3625
+      ],
+      [
+        170,
+        534
+      ]
+    ]
+  },
+  "baseline_test": {
+    "accuracy": 0.963443763630699,
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": 0.0,
+    "average_precision": 0.03655623636930107,
+    "roc_auc": 0.5,
+    "brier_score": 0.03541561723845671,
+    "confusion_matrix": [
+      [
+        18554,
+        0
+      ],
+      [
+        704,
+        0
+      ]
+    ]
+  },
+  "baseline_description": "DummyClassifier(prior), decisão majoritária a 0.5"
+}
