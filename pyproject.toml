@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "logipredict-ml"
+version = "0.1.0"
+description = "Pipeline Olist e inferência de risco de atraso no despacho"
+requires-python = ">=3.12"
+dependencies = [
+  "pandas==2.3.3", "numpy==2.3.4", "scikit-learn==1.7.2",
+  "joblib==1.5.2", "fastapi==0.119.1", "uvicorn==0.38.0",
+  "pydantic==2.12.3", "matplotlib==3.10.7"
+]
+
+[project.optional-dependencies]
+dev = ["pytest==8.4.2", "httpx==0.28.1", "ruff==0.14.1"]
+
+[tool.setuptools.packages.find]
+where = ["ml"]
+
+[tool.pytest.ini_options]
+testpaths = ["ml/tests"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"

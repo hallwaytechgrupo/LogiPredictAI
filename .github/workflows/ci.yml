@@ -1,0 +1,44 @@
+name: Verificação do back-end e IA
+
+on:
+  push:
+    branches: [back, machineLearning]
+  pull_request:
+    branches: [main, back, machineLearning]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: api/package-lock.json
+      - run: python -m pip install -r requirements.lock
+      - run: python -m pip install -e '.[dev]'
+      - run: python -m ruff check ml scripts
+      - run: python -m pytest -q
+      - run: npm ci --prefix api
+      - run: npm test --prefix api
+      - run: npm run check --prefix api
+      - name: Treinar demonstração e testar os dois serviços
+        shell: bash
+        run: |
+          python -m logipredict.demo
+          python -m logipredict.train --input data/processed/demo.csv --source synthetic --model-dir models/demo --report-dir reports/local/demo --trees 30
+          MODEL_DIR=models/demo python -m uvicorn logipredict.service:app --host 127.0.0.1 --port 8000 &
+          ml_pid=$!
+          node api/src/server.js &
+          api_pid=$!
+          trap 'kill "$ml_pid" "$api_pid" 2>/dev/null || true' EXIT
+          python scripts/wait_ready.py
+          python scripts/smoke_test.py

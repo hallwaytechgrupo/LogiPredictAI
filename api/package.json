@@ -1,0 +1,14 @@
+{
+  "name": "logipredict-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/server.js",
+    "dev": "node --watch --env-file-if-exists=.env src/server.js",
+    "test": "node --test",
+    "check": "node --check src/app.js && node --check src/server.js"
+  },
+  "dependencies": { "express": "5.1.0", "helmet": "8.1.0" }
+}

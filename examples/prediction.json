@@ -1,0 +1,14 @@
+{
+  "purchase_at": "2018-05-01T10:30:00",
+  "dispatched_at": "2018-05-03T14:00:00",
+  "estimated_delivery_at": "2018-05-15T00:00:00",
+  "seller_state": "SP",
+  "customer_state": "BA",
+  "distance_km": 1450,
+  "total_weight_g": 1800,
+  "total_volume_cm3": 6000,
+  "items_count": 1,
+  "sellers_count": 1,
+  "price": 149.9,
+  "freight_value": 32.5
+}
