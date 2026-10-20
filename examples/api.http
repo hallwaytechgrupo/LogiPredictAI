@@ -1,0 +1,17 @@
+### API disponível
+GET http://127.0.0.1:3001/health
+
+### Modelo disponível
+GET http://127.0.0.1:3001/ready
+
+### Metadados e métricas
+GET http://127.0.0.1:3001/api/v1/model
+
+### Atrasos históricos por UF (não são previsões)
+GET http://127.0.0.1:3001/api/v1/analytics/states
+
+### Prever no despacho
+POST http://127.0.0.1:3001/api/v1/predictions
+Content-Type: application/json
+
+< ./prediction.json
