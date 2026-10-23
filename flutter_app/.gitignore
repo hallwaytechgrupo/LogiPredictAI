@@ -18,6 +18,18 @@ migrate_working_dir/
 *.iws
 .idea/
 
+# Dados e datasets
+*.csv
+*.CSV
+back/data/
+back/ml/data/
+
+# Modelos treinados
+back/ml/models/
+
+# Arquivos da IDE
+.idea/
+
 # The .vscode folder contains launch configuration and tasks you configure in
 # VS Code which you may wish to be included in version control, so this line
 # is commented out by default.
