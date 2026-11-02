@@ -1,0 +1,12 @@
+.git
+.idea
+.venv
+**/__pycache__
+**/.pytest_cache
+**/node_modules
+**/build
+back/data
+back/ml/data
+back/ml/reports
+reports/local
+*.log

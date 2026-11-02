@@ -2,7 +2,7 @@
   "version": "rf-olist-b96c2d0272d8",
   "source": "olist",
   "synthetic": false,
-  "trained_at": "2026-10-22T23:20:51.710019+00:00",
+  "trained_at": "2026-10-23T23:44:12.749627+00:00",
   "dataset_sha256": "b96c2d0272d83a6440950c73604dab2748dd4328cb0aaf862875c69469853782",
   "python_version": "3.12.3",
   "sklearn_version": "1.9.1",

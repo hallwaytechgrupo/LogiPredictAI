@@ -134,6 +134,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "7.0.2"
+  flutter_map_geojson2:
+    dependency: "direct main"
+    description:
+      name: flutter_map_geojson2
+      sha256: "7e05ffbf87cc777d872ec7de21142e5aca5ae65949265943d0e1bc704b81011e"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.2"
   flutter_plugin_android_lifecycle:
     dependency: transitive
     description:
@@ -240,6 +248,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.12.17"
+  material_color_names:
+    dependency: transitive
+    description:
+      name: material_color_names
+      sha256: "12bf9cdbe60002908730605854172d878ad726fd4f2dfdc665aea1b32895fc8e"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.0"
   material_color_utilities:
     dependency: transitive
     description:

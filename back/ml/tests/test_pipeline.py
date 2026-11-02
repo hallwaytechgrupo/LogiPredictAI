@@ -1,3 +1,14 @@
+"""Testes do pipeline completo de machine learning do LogiPredictAI.
+
+Cobre:
+- ETL (prepare): agregação de itens, cálculo de distância, validação de chaves.
+- Haversine: precisão do cálculo de distância geográfica.
+- Divisão temporal: isolamento entre treino, validação e teste.
+- Validação de entrada: rejeição de dados inválidos ou com vazamento.
+- Features: consistência entre treino e inferência.
+- Serviço FastAPI: comportamento quando modelo ausente ou presente.
+- Pipeline end-to-end: treino + inferência com dados sintéticos.
+"""
 import json
 
 import pandas as pd
@@ -14,6 +25,7 @@ from logipredict.train import temporal_split, train
 
 @pytest.fixture
 def shipment():
+    """Retorna um pedido válido para testes de validação e inferência."""
     return {"purchase_at": "2018-01-01T10:00:00", "dispatched_at": "2018-01-02T12:00:00",
             "estimated_delivery_at": "2018-01-10T00:00:00", "seller_state": "SP", "customer_state": "RJ",
             "distance_km": None, "total_weight_g": None, "total_volume_cm3": None,
@@ -21,6 +33,10 @@ def shipment():
 
 
 def write_raw(root):
+    """Cria 6 CSVs mínimos da Olist em um diretório temporário para testes do prepare().
+
+    O dataset contém 1 pedido com 2 itens, 1 vendedor, 1 cliente e 2 coordenadas de geolocalização.
+    """
     tables = {
         "orders": [{"order_id": "o1", "customer_id": "c1", "order_status": "delivered",
                     "order_purchase_timestamp": "2018-01-01 10:00:00",
@@ -41,6 +57,7 @@ def write_raw(root):
 
 
 def test_prepare_preserves_order_grain_and_calendar_deadline(tmp_path):
+    """Verifica que prepare() agrega itens corretamente e calcula is_late por data calendário."""
     write_raw(tmp_path)
     frame, quality = prepare(tmp_path)
     assert len(frame) == 1  # Dois itens e duas coordenadas não produzem quatro pedidos.
@@ -56,6 +73,7 @@ def test_prepare_preserves_order_grain_and_calendar_deadline(tmp_path):
 
 
 def test_prepare_unknown_weight_not_silently_zero(tmp_path):
+    """Verifica que peso ausente não é preenchido com zero — deve permanecer NaN."""
     write_raw(tmp_path)
     path = tmp_path / "olist_products_dataset.csv"
     products = pd.read_csv(path)
@@ -67,6 +85,7 @@ def test_prepare_unknown_weight_not_silently_zero(tmp_path):
 
 
 def test_prepare_rejects_conflicting_key(tmp_path):
+    """Verifica que prepare() rejeita chaves duplicadas com valores conflitantes."""
     write_raw(tmp_path)
     path = tmp_path / "olist_customers_dataset.csv"
     customers = pd.read_csv(path)
@@ -76,10 +95,19 @@ def test_prepare_rejects_conflicting_key(tmp_path):
 
 
 def test_distance_known_route():
+    """Verifica a precisão do cálculo Haversine com uma rota conhecida (SP-RJ ~360 km)."""
     assert haversine(-23.5505, -46.6333, -22.9068, -43.1729) == pytest.approx(360.7, abs=2)
 
 
 def test_temporal_split_purges_future_labels():
+    """Verifica que a divisão temporal isola corretamente os três períodos.
+
+    Garante que:
+    - Não há sobreposição de dispatched_at entre períodos.
+    - delivered_at do treino não ultrapassa o início da validação.
+    - delivered_at da validação não ultrapassa o início do teste.
+    - Rótulos futuros (delivered_at, is_late) não vazam para as features.
+    """
     frame = generate()
     training, validation, test = temporal_split(frame)
     assert training.dispatched_at.max() < validation.dispatched_at.min()
@@ -98,11 +126,19 @@ def test_temporal_split_purges_future_labels():
     {"purchase_at": "2018-01-01T10:00:00Z"}, {"delivered_at": "2018-01-11T00:00:00"},
 ])
 def test_input_rejects_invalid_or_leaked_data(shipment, patch):
+    """Verifica que Shipment rejeita dados inválidos ou com vazamento de informação futura.
+
+    Casos testados:
+    - UF inválida, preço negativo, preço booleano, preço string.
+    - Peso infinito, itens_count float, mais vendedores que itens.
+    - Despacho antes da compra, fuso horário, delivered_at na entrada.
+    """
     with pytest.raises(ValidationError):
         Shipment.model_validate({**shipment, **patch})
 
 
 def test_shared_features(shipment):
+    """Verifica que feature_frame() produz as colunas esperadas com valores corretos."""
     row = Shipment.model_validate(shipment)
     features = feature_frame(pd.DataFrame([row.model_dump()]))
     assert list(features.columns) == FEATURES
@@ -111,12 +147,25 @@ def test_shared_features(shipment):
 
 
 def test_missing_model_explicitly_unavailable(tmp_path, shipment):
+    """Verifica que a API retorna 503 quando o modelo não foi treinado."""
     with TestClient(create_app(tmp_path)) as client:
         assert client.get("/health").status_code == 503
         assert client.post("/predict", json=shipment).status_code == 503
 
 
 def test_training_artifact_serves_predictions(tmp_path, shipment):
+    """Teste end-to-end: treina com dados sintéticos e verifica que a API serve previsões.
+
+    Valida:
+    - Modelo sintético é identificado corretamente.
+    - Average Precision supera a baseline majoritária.
+    - Probabilidade está entre 0 e 1.
+    - predicted_late é consistente com o limiar.
+    - Warnings são retornados.
+    - Analytics por UF funciona.
+    - Entrada inválida retorna 422.
+    - Hash do dataset é consistente entre metadados e arquivo.
+    """
     path = tmp_path / "demo.csv"
     generate().to_csv(path, index=False)
     metadata = train(path, tmp_path / "model", tmp_path / "reports", "synthetic", trees=15)

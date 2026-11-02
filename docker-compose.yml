@@ -1,0 +1,53 @@
+
+services:
+  ml:
+    build:
+      context: .
+      dockerfile: back/ml/Dockerfile
+    environment:
+      MODEL_DIR: /app/models/olist
+    volumes:
+      - ./back/ml/models/olist:/app/models/olist:ro
+    expose:
+      - "8000"
+    restart: unless-stopped
+
+  api:
+    build:
+      context: back
+      dockerfile: Dockerfile
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3001
+      ML_URL: http://ml:8000
+      HUBS_FILE: /app/data/hubs.json
+      ORDERS_FILE: /app/data/orders.json
+      PREDICTIONS_FILE: /app/data/predictions.json
+      PREDICTIONS_JOURNAL_FILE: /app/data/predictions.jsonl
+      OLIST_DATASET_FILE: /app/datasets/pedidos_logipredict.csv
+      GEOLOCATION_FILE: /app/geolocation/olist_geolocation_dataset.csv
+      OLIST_ORDERS_FILE: /app/raw/olist_orders_dataset.csv
+      OLIST_CUSTOMERS_FILE: /app/raw/olist_customers_dataset.csv
+    volumes:
+      - ./back/data/hubs:/app/data
+      - ${OLIST_DATASET_HOST_FILE:-./back/data/pedidos_logipredict.csv}:/app/datasets/pedidos_logipredict.csv:ro
+      - ./back/data/raw/olist_geolocation_dataset.csv:/app/geolocation/olist_geolocation_dataset.csv:ro
+      - ./back/data/raw/olist_orders_dataset.csv:/app/raw/olist_orders_dataset.csv:ro
+      - ./back/data/raw/olist_customers_dataset.csv:/app/raw/olist_customers_dataset.csv:ro
+    depends_on:
+      - ml
+    ports:
+      - "3001:3001"
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: flutter_app/Dockerfile
+      args:
+        API_BASE_URL: ${API_BASE_URL:-http://localhost:8080}
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+    restart: unless-stopped

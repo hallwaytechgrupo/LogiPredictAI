@@ -1,0 +1,171 @@
+{
+  "source": "olist",
+  "synthetic": false,
+  "type": "historical_observed",
+  "period_start": "2016-10-08 10:34:01",
+  "period_end": "2018-09-11 19:48:28",
+  "states": [
+    {
+      "customer_state": "AC",
+      "orders": 80,
+      "late_orders": 3,
+      "late_rate": 0.0375
+    },
+    {
+      "customer_state": "AL",
+      "orders": 397,
+      "late_orders": 85,
+      "late_rate": 0.2141057934508816
+    },
+    {
+      "customer_state": "AM",
+      "orders": 145,
+      "late_orders": 4,
+      "late_rate": 0.027586206896551724
+    },
+    {
+      "customer_state": "AP",
+      "orders": 67,
+      "late_orders": 2,
+      "late_rate": 0.029850746268656716
+    },
+    {
+      "customer_state": "BA",
+      "orders": 3252,
+      "late_orders": 395,
+      "late_rate": 0.12146371463714638
+    },
+    {
+      "customer_state": "CE",
+      "orders": 1278,
+      "late_orders": 176,
+      "late_rate": 0.13771517996870108
+    },
+    {
+      "customer_state": "DF",
+      "orders": 2077,
+      "late_orders": 118,
+      "late_rate": 0.05681271064034665
+    },
+    {
+      "customer_state": "ES",
+      "orders": 1989,
+      "late_orders": 214,
+      "late_rate": 0.10759175465057819
+    },
+    {
+      "customer_state": "GO",
+      "orders": 1951,
+      "late_orders": 128,
+      "late_rate": 0.06560738083034341
+    },
+    {
+      "customer_state": "MA",
+      "orders": 714,
+      "late_orders": 125,
+      "late_rate": 0.17507002801120447
+    },
+    {
+      "customer_state": "MG",
+      "orders": 11327,
+      "late_orders": 519,
+      "late_rate": 0.04581972278626291
+    },
+    {
+      "customer_state": "MS",
+      "orders": 699,
+      "late_orders": 68,
+      "late_rate": 0.09728183118741059
+    },
+    {
+      "customer_state": "MT",
+      "orders": 883,
+      "late_orders": 53,
+      "late_rate": 0.06002265005662514
+    },
+    {
+      "customer_state": "PA",
+      "orders": 945,
+      "late_orders": 106,
+      "late_rate": 0.11216931216931217
+    },
+    {
+      "customer_state": "PB",
+      "orders": 517,
+      "late_orders": 54,
+      "late_rate": 0.10444874274661509
+    },
+    {
+      "customer_state": "PE",
+      "orders": 1592,
+      "late_orders": 153,
+      "late_rate": 0.09610552763819095
+    },
+    {
+      "customer_state": "PI",
+      "orders": 473,
+      "late_orders": 66,
+      "late_rate": 0.13953488372093023
+    },
+    {
+      "customer_state": "PR",
+      "orders": 4912,
+      "late_orders": 199,
+      "late_rate": 0.04051302931596091
+    },
+    {
+      "customer_state": "RJ",
+      "orders": 12330,
+      "late_orders": 1495,
+      "late_rate": 0.12124898621248986
+    },
+    {
+      "customer_state": "RN",
+      "orders": 474,
+      "late_orders": 44,
+      "late_rate": 0.09282700421940929
+    },
+    {
+      "customer_state": "RO",
+      "orders": 243,
+      "late_orders": 7,
+      "late_rate": 0.02880658436213992
+    },
+    {
+      "customer_state": "RR",
+      "orders": 41,
+      "late_orders": 5,
+      "late_rate": 0.12195121951219512
+    },
+    {
+      "customer_state": "RS",
+      "orders": 5327,
+      "late_orders": 325,
+      "late_rate": 0.06100994931481134
+    },
+    {
+      "customer_state": "SC",
+      "orders": 3534,
+      "late_orders": 291,
+      "late_rate": 0.08234295415959253
+    },
+    {
+      "customer_state": "SE",
+      "orders": 334,
+      "late_orders": 51,
+      "late_rate": 0.15269461077844312
+    },
+    {
+      "customer_state": "SP",
+      "orders": 40427,
+      "late_orders": 1818,
+      "late_rate": 0.04496994582828308
+    },
+    {
+      "customer_state": "TO",
+      "orders": 273,
+      "late_orders": 27,
+      "late_rate": 0.0989010989010989
+    }
+  ]
+}

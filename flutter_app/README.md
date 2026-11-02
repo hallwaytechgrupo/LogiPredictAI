@@ -6,10 +6,28 @@ Aplicativo desenvolvido em Flutter para simulação e análise de riscos logíst
 
 - **Simulador logístico:** preenchimento de informações para simular o risco de uma entrega.
 - **Mapa:** visualização de informações geográficas utilizando OpenStreetMap.
-- **Pedidos:** visualização de pedidos em formato de tabela.
+- **Pedidos:** importação em lote, seleção manual do hub responsável e análise de risco.
 - **Análises:** gráficos para auxiliar na interpretação dos dados logísticos.
 
-> **Observação:** os dados podem ser demonstrativos. A integração com uma API ou banco de dados real depende da implementação correspondente no projeto.
+> **Previsões:** no fluxo em lote, o resultado individual vem do serviço de ML e é registrado no histórico da API junto ao `order_id` e ao `hub_id` vigente. Importar um pedido não atribui hub automaticamente. A simulação individual sem pedido registrado continua sem persistência.
+
+## Histórico de previsões por hub
+
+A API Node encaminha a previsão ao serviço Python sem acrescentar o vínculo do hub ao payload de inferência. A tela de lote envia o ID do pedido como parâmetro da API Node; o serviço captura o hub associado, salva a resposta real do modelo e retorna `prediction_id` e `persisted`.
+
+- `POST /api/v1/predictions?order_id=<id>` persiste a previsão de um pedido já importado. Sem `order_id`, mantém a simulação avulsa sem histórico.
+- `GET /api/v1/analytics/hubs` agrega previsões reais persistidas. Pode filtrar por `start_date`, `end_date` (datas UTC inclusivas, `YYYY-MM-DD`) e `hub_id`.
+- O agregado usa a decisão `predicted_late` retornada pelo modelo. Apresenta contagem e percentual de decisões de risco, thresholds e versões observados, com indicadores quando variam.
+- Registros sem hub, incompletos, de modelo sintético ou ligados a hubs não cadastrados não entram na agregação. Hubs sem previsões elegíveis são omitidos.
+- O mapa consulta esse endpoint ao abrir e ao atualizar. Associa os resultados exclusivamente por `hub_id`; hubs sem agregado continuam azuis e são identificados como "Sem previsões associadas". A camada pode ser ligada/desligada e suas cores representam faixas descritivas do percentual agregado (0%, >0–<50%, 50–<100%, 100%), não thresholds de classificação do modelo.
+
+O arquivo `predictions.json` é persistido no volume de dados da API. A escrita serializada e por arquivo temporário protege contra gravações concorrentes dentro de uma instância Node, mas JSON não oferece transações nem coordenação entre múltiplas instâncias. Os agregados são previsões individuais agrupadas pela associação manual ao hub; não representam um modelo de risco geográfico do hub. Consulte `back/README.md` para o contrato completo e as limitações.
+
+## Simulação Olist em lote
+
+Na aba **Simulação em Lote**, **Executar simulação Olist** carrega `GET /api/v1/datasets/olist` pela URL de API já configurada e executa o CSV preparado `back/data/pedidos_logipredict.csv`. O local do arquivo pode ser configurado na API: localmente por `OLIST_DATASET_FILE`; no Compose por `OLIST_DATASET_HOST_FILE` (padrão `./back/data/pedidos_logipredict.csv`). Consulte `back/README.md` para detalhes.
+
+Antes da execução, selecione um hub aprovado. Esse vínculo é apenas uma configuração de demonstração e não comprova a expedição histórica dos pedidos Olist. O hub escolhido é aplicado somente a pedidos sem vínculo; hubs já associados são preservados. A importação usa blocos de até 2.000 pedidos, deduplica linhas por `order_id`, e envia previsões uma por vez à API. O progresso mostra importação e análise, falhas e ignorados; Cancelar impede novas chamadas e conserva o que já foi persistido. Como cada previsão é individual, executar a base completa pode levar tempo. Reexecutar não cria pedidos duplicados, mas gera novas previsões históricas.
 
 ## Tecnologias utilizadas
 

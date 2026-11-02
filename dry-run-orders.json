@@ -1,0 +1,25 @@
+{
+  "dry_run": true,
+  "orders": [
+    {
+      "order_id": "e481f51cbdc54678b7cc49136f2d6af7",
+      "customer_state": "SP"
+    },
+    {
+      "order_id": "53cdb2fc8bc7dce0b6741e2150273451",
+      "customer_state": "BA"
+    },
+    {
+      "order_id": "47770eb9100c2d0c44946d9cf07ec65d",
+      "customer_state": "GO"
+    },
+    {
+      "order_id": "949d5b44dbf5de918fe9c16f97b45f8a",
+      "customer_state": "RN"
+    },
+    {
+      "order_id": "ad21c59c0840e6cb83a9ceb5573f8159",
+      "customer_state": "SP"
+    }
+  ]
+}

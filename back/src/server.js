@@ -1,3 +1,15 @@
+/**
+ * Ponto de entrada do servidor backend LogiPredictAI.
+ *
+ * Lê as variáveis de ambiente, valida as configurações e inicia o servidor Express.
+ * Suporta desligamento gracioso via SIGINT/SIGTERM com timeout de 10 segundos.
+ *
+ * Variáveis de ambiente:
+ *   PORT          - Porta do servidor (padrão: 3001).
+ *   HOST          - Host para vinculação (padrão: 127.0.0.1).
+ *   ML_URL        - URL do serviço ML FastAPI (padrão: http://127.0.0.1:8000).
+ *   ML_TIMEOUT_MS - Timeout em ms para chamadas ao ML (padrão: 10000).
+ */
 import { createApp } from './app.js';
 
 const port = Number(process.env.PORT ?? 3001);
@@ -10,6 +22,8 @@ const host = process.env.HOST ?? '127.0.0.1';
 const server = createApp({ mlUrl, timeoutMs }).listen(port, host, () => {
   console.log(`LogiPredict API em http://${host}:${port}`);
 });
+
+// Desligamento gracioso: fecha o servidor e sai em até 10 segundos.
 for (const signal of ['SIGINT', 'SIGTERM']) {
   process.on(signal, () => {
     server.close(() => process.exit(0));

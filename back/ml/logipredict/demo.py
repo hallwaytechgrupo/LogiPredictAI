@@ -1,4 +1,13 @@
-"""Gera dados ARTIFICIAIS para verificar a instalação. Não mede desempenho na Olist."""
+"""Gera dados ARTIFICIAIS para verificar a instalação. Não mede desempenho na Olist.
+
+Usado para:
+- Testar o pipeline de treino sem depender dos dados reais da Olist.
+- Verificar que todas as dependências Python estão corretamente instaladas.
+- Demonstrar o sistema em ambientes de avaliação (CI, Docker, etc.).
+
+Os dados simulam uma distribuição realista de distâncias, prazos e atrasos,
+mas não representam o comportamento real do marketplace.
+"""
 import argparse
 from pathlib import Path
 
@@ -7,11 +16,30 @@ import pandas as pd
 
 
 def generate(size=1200, seed=42):
+    """Gera um DataFrame com pedidos sintéticos no mesmo formato do prepare().
+
+    Simula:
+    - Compras a cada 6 horas.
+    - Lead time de despacho: 1-4 dias.
+    - Distância: 10-3500 km.
+    - Tempo de trânsito: função da distância + ruído normal.
+    - Prazo prometido: 9-26 dias a partir da compra.
+    - Atraso ocorre quando o trânsito excede o prazo prometido.
+
+    Args:
+        size: Número de pedidos sintéticos a gerar.
+        seed: Semente para reprodutibilidade.
+
+    Returns:
+        DataFrame com as mesmas colunas esperadas pelo train().
+    """
     rng = np.random.default_rng(seed)
     purchase = pd.date_range("2017-01-01", periods=size, freq="6h")
     lead = rng.integers(1, 5, size)
     dispatch = purchase + pd.to_timedelta(lead, unit="D")
     distance = rng.uniform(10, 3500, size)
+    # Tempo de trânsito em dias: distância / velocidade média + ruído.
+    # Velocidade média ~190 km/dia reflete prazos típicos de transporte rodoviário.
     transit = np.maximum(1, distance / 190 + rng.normal(2, 3, size))
     promise = rng.integers(9, 26, size)
     frame = pd.DataFrame({
@@ -31,6 +59,7 @@ def generate(size=1200, seed=42):
 
 
 def main():
+    """Ponto de entrada do script: gera dados sintéticos e salva em CSV."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=Path("data/processed/demo.csv"))
     parser.add_argument("--rows", type=int, default=1200)
