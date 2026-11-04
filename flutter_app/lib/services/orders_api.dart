@@ -139,6 +139,59 @@ class OrdersApi {
     return data;
   }
 
+  /// Lista os pedidos importados com paginação e filtros opcionais.
+  ///
+  /// [page] controla a página (inicia em 1).
+  /// [perPage] controla o número de itens por página (padrão 50, máximo 500).
+  /// [hubId] filtra por hub associado.
+  /// [query] filtra por texto contido no order_id.
+  Future<Map<String, dynamic>> listOrders({
+    int page = 1,
+    int perPage = 50,
+    String? hubId,
+    String? query,
+  }) async {
+    final queryParams = <String, String>{
+      'page': page.toString(),
+      'per_page': perPage.toString(),
+      if (hubId != null) 'hub_id': hubId,
+      if (query != null && query.isNotEmpty) 'q': query,
+    };
+    final uri = Uri.parse('$_baseUrl/api/v1/orders')
+        .replace(queryParameters: queryParams);
+    final headers = {'Accept': 'application/json'};
+    late final http.Response response;
+    try {
+      response = await _client
+          .get(uri, headers: headers)
+          .timeout(const Duration(seconds: 15));
+    } catch (error) {
+      throw OrdersApiException(
+          'Não foi possível acessar a API de pedidos: $error');
+    }
+    final dynamic decoded;
+    try {
+      decoded = jsonDecode(response.body);
+    } on FormatException {
+      throw OrdersApiException(
+        'A API de pedidos retornou uma resposta inválida (HTTP ${response.statusCode}).',
+        statusCode: response.statusCode,
+      );
+    }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final message = decoded is Map<String, dynamic>
+          ? decoded['message'] ?? decoded['error'] ?? 'Erro desconhecido'
+          : 'HTTP ${response.statusCode}';
+      throw OrdersApiException(message.toString(),
+          statusCode: response.statusCode);
+    }
+    if (decoded is! Map<String, dynamic>) {
+      throw const OrdersApiException(
+          'Formato de resposta da API de pedidos inválido.');
+    }
+    return decoded;
+  }
+
   /// Distributes orders across hubs based on the destination state.
   /// When [dryRun] is true, no data is modified — only a preview is returned.
   Future<Map<String, dynamic>> assignHubsByState(

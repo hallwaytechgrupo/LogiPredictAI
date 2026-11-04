@@ -30,6 +30,7 @@ import '../services/orders_geography_api.dart';
 import '../services/orders_region_api.dart';
 import '../widgets/hub_risk_layer_unavailable.dart';
 import 'hubs_management_screen.dart';
+import 'orders_management_screen.dart';
 
 part 'dashboard_simulator_screen.dart';
 part 'dashboard_map_screen.dart';
@@ -652,6 +653,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _buildBatchPage(),
       _buildAnalyticsPage(),
       const HubsManagementScreen(),
+      const OrdersManagementScreen(),
     ];
     return Scaffold(
       appBar: AppBar(
@@ -735,6 +737,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       'Simulação em Lote',
       'Analytics & KPIs',
       'Gestão de Hubs',
+      'Pedidos',
     ];
     const icons = [
       Icons.calculate_outlined,
@@ -742,6 +745,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       Icons.table_view_outlined,
       Icons.show_chart,
       Icons.warehouse_outlined,
+      Icons.receipt_long_outlined,
     ];
     return Container(
       decoration: BoxDecoration(

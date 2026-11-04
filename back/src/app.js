@@ -1257,6 +1257,72 @@ export function createApp({
     }
   });
 
+  /* ---- Listagem de pedidos importados ---- */
+
+  // Lista todos os pedidos importados com paginação e filtros opcionais.
+  // Deve ser definido antes de /:orderId para que Express não confunda "list" com um ID.
+  app.get('/api/v1/orders', async (req, res) => {
+    const parsePositiveInt = (value, defaultValue, max) => {
+      if (value === undefined) return { value: defaultValue };
+      const parsed = parseInt(value, 10);
+      if (!Number.isFinite(parsed) || parsed < 1 || parsed > max) return { error: true };
+      return { value: parsed };
+    };
+    const pageResult = parsePositiveInt(req.query.page, 1, 9999);
+    const perPageResult = parsePositiveInt(req.query.per_page, 50, 500);
+    if (pageResult.error || perPageResult.error) {
+      return res.status(422).json({ error: 'INVALID_PAGE', message: 'Parâmetros de paginação inválidos. Use page e per_page como inteiros positivos.' });
+    }
+    const page = pageResult.value;
+    const perPage = perPageResult.value;
+    const hubId = req.query.hub_id;
+    if (hubId !== undefined && (typeof hubId !== 'string' || !hubId.trim())) {
+      return res.status(422).json({ error: 'INVALID_HUB_ID', message: 'hub_id inválido.' });
+    }
+    const q = req.query.q;
+    if (q !== undefined && typeof q !== 'string') {
+      return res.status(422).json({ error: 'INVALID_QUERY', message: 'Parâmetro q deve ser uma string.' });
+    }
+    try {
+      let orders = await readOrders();
+      if (hubId) orders = orders.filter((o) => o.hub_id === hubId.trim());
+      if (q) {
+        const search = q.trim().toLowerCase();
+        orders = orders.filter((o) => String(o.order_id).toLowerCase().includes(search));
+      }
+      const total = orders.length;
+      // Sort by createdAt descending (most recent first)
+      orders.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
+      const start = (page - 1) * perPage;
+      const end = start + perPage;
+      const data = orders.slice(start, end);
+      // Enrich with hub information
+      const hubs = await readHubs();
+      const hubsById = new Map(hubs.map((h) => [h.id, h]));
+      const enriched = data.map((order) => {
+        const hub = order.hub_id == null ? null : hubsById.get(order.hub_id) ?? null;
+        return {
+          order_id: order.order_id,
+          hub_id: order.hub_id ?? null,
+          hub: hub ? { id: hub.id, code: hub.code, name: hub.name, city: hub.city, state: hub.state } : null,
+          source: order.source ?? null,
+          createdAt: order.createdAt,
+          updatedAt: order.updatedAt,
+        };
+      });
+      return res.json({
+        data: enriched,
+        total,
+        page,
+        per_page: perPage,
+        total_pages: Math.ceil(total / perPage) || 1,
+      });
+    } catch (error) {
+      console.error('Falha ao listar pedidos:', error.message);
+      return res.status(500).json({ error: 'ORDER_STORAGE_ERROR', message: 'Não foi possível consultar os pedidos.' });
+    }
+  });
+
   /* ---- Gerenciamento de hubs logísticos (CRUD) ---- */
 
   // Lista todos os hubs com filtro opcional por status.

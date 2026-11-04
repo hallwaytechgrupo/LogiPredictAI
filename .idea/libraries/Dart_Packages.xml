@@ -121,6 +121,13 @@
             </list>
           </value>
         </entry>
+        <entry key="flutter_map_geojson2">
+          <value>
+            <list>
+              <option value="$PROJECT_DIR$/../.pub-cache/hosted/pub.dev/flutter_map_geojson2-1.0.2/lib" />
+            </list>
+          </value>
+        </entry>
         <entry key="flutter_plugin_android_lifecycle">
           <value>
             <list>
@@ -216,6 +223,13 @@
           <value>
             <list>
               <option value="$PROJECT_DIR$/../.pub-cache/hosted/pub.dev/matcher-0.12.17/lib" />
+            </list>
+          </value>
+        </entry>
+        <entry key="material_color_names">
+          <value>
+            <list>
+              <option value="$PROJECT_DIR$/../.pub-cache/hosted/pub.dev/material_color_names-1.0.0/lib" />
             </list>
           </value>
         </entry>
@@ -399,6 +413,7 @@
       <root url="file://$PROJECT_DIR$/../.pub-cache/hosted/pub.dev/fl_chart-0.69.2/lib" />
       <root url="file://$PROJECT_DIR$/../.pub-cache/hosted/pub.dev/flutter_lints-4.0.0/lib" />
       <root url="file://$PROJECT_DIR$/../.pub-cache/hosted/pub.dev/flutter_map-7.0.2/lib" />
+      <root url="file://$PROJECT_DIR$/../.pub-cache/hosted/pub.dev/flutter_map_geojson2-1.0.2/lib" />
       <root url="file://$PROJECT_DIR$/../.pub-cache/hosted/pub.dev/flutter_plugin_android_lifecycle-2.0.31/lib" />
       <root url="file://$PROJECT_DIR$/../.pub-cache/hosted/pub.dev/http-1.6.0/lib" />
       <root url="file://$PROJECT_DIR$/../.pub-cache/hosted/pub.dev/http_parser-4.1.2/lib" />
@@ -411,6 +426,7 @@
       <root url="file://$PROJECT_DIR$/../.pub-cache/hosted/pub.dev/lists-1.0.1/lib" />
       <root url="file://$PROJECT_DIR$/../.pub-cache/hosted/pub.dev/logger-2.8.0/lib" />
       <root url="file://$PROJECT_DIR$/../.pub-cache/hosted/pub.dev/matcher-0.12.17/lib" />
+      <root url="file://$PROJECT_DIR$/../.pub-cache/hosted/pub.dev/material_color_names-1.0.0/lib" />
       <root url="file://$PROJECT_DIR$/../.pub-cache/hosted/pub.dev/material_color_utilities-0.11.1/lib" />
       <root url="file://$PROJECT_DIR$/../.pub-cache/hosted/pub.dev/meta-1.16.0/lib" />
       <root url="file://$PROJECT_DIR$/../.pub-cache/hosted/pub.dev/mgrs_dart-2.0.0/lib" />

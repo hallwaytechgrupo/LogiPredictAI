@@ -9,6 +9,10 @@ Base local: `http://127.0.0.1:3001`. Serviço Python interno: `http://127.0.0.1:
 | GET | `/api/v1/model` | Versão, origem, features, limiar e métricas do treinamento |
 | POST | `/api/v1/predictions` | Classificação de um pedido no despacho |
 | GET | `/api/v1/analytics/states` | Pedidos e atrasos observados por UF |
+| GET | `/api/v1/orders` | Lista paginada de pedidos importados |
+| POST | `/api/v1/orders/import` | Importa pedidos em lote |
+| GET | `/api/v1/orders/:orderId` | Consulta um pedido por ID |
+| PATCH | `/api/v1/orders/:orderId/hub` | Associa/dissocia hub a um pedido |
 
 ## Requisição de previsão
 
@@ -67,3 +71,55 @@ O Node não repassa os valores de entrada anexados às mensagens de erro do Pyda
 ## Configuração
 
 Copie `api/.env.example` para `api/.env` se precisar alterar host, porta, endereço do serviço interno ou timeout. Os scripts `npm start` e `npm run dev` leem esse arquivo quando executados na pasta `api`. O Python lê `MODEL_DIR` do ambiente; por padrão, `models/olist` relativo à pasta de execução.
+
+## Listagem de pedidos
+
+`GET /api/v1/orders` retorna os pedidos importados via `POST /api/v1/orders/import`, com paginação e filtros opcionais.
+
+### Parâmetros de consulta
+
+| Parâmetro | Tipo | Padrão | Máximo | Descrição |
+| --- | --- | --- | --- | --- |
+| `page` | inteiro | 1 | 9999 | Número da página |
+| `per_page` | inteiro | 50 | 500 | Itens por página |
+| `hub_id` | texto | — | — | Filtra por hub associado |
+| `q` | texto | — | — | Busca texto contido no `order_id` |
+
+### Exemplo de resposta
+
+```json
+{
+  "data": [
+    {
+      "order_id": "order-001",
+      "hub_id": "hub-stable-id-1",
+      "hub": {
+        "id": "hub-stable-id-1",
+        "code": "HUB-01",
+        "name": "Hub São Paulo",
+        "city": "São Paulo",
+        "state": "SP"
+      },
+      "source": "olist",
+      "createdAt": "2025-06-15T12:00:00.000Z",
+      "updatedAt": "2025-06-15T12:00:00.000Z"
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "per_page": 50,
+  "total_pages": 1
+}
+```
+
+### Erros específicos
+
+| HTTP | Código | Significado |
+| --- | --- | --- |
+| 422 | `INVALID_PAGE` | `page` ou `per_page` inválido |
+| 422 | `INVALID_HUB_ID` | `hub_id` não é uma string válida |
+| 500 | `ORDER_STORAGE_ERROR` | Falha ao ler `orders.json` |
+
+### Configuração Flutter
+
+A URL base é configurada via `--dart-define=API_BASE_URL=http://127.0.0.1:3001`. No Android emulador, use `http://10.0.2.2:3001` para acessar o host.

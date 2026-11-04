@@ -121,4 +121,125 @@ void main() {
 
     expect(selected, hub.id);
   });
+
+  test('listOrders returns paginated orders from the API', () async {
+    http.Request? captured;
+    final api = OrdersApi(
+      baseUrl: 'https://api.example.test',
+      client: MockClient((request) async {
+        captured = request;
+        return http.Response(
+          jsonEncode({
+            'data': [
+              {
+                'order_id': 'order-1',
+                'hub_id': 'hub-1',
+                'hub': {'id': 'hub-1', 'code': 'HUB-01', 'name': 'Hub SP', 'city': 'São Paulo', 'state': 'SP'},
+                'source': 'olist',
+                'createdAt': '2025-06-15T12:00:00.000Z',
+                'updatedAt': '2025-06-15T12:00:00.000Z',
+              },
+            ],
+            'total': 1,
+            'page': 1,
+            'per_page': 50,
+            'total_pages': 1,
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    final result = await api.listOrders();
+
+    expect(captured!.url.path, '/api/v1/orders');
+    expect(captured!.url.queryParameters['page'], '1');
+    expect(captured!.url.queryParameters['per_page'], '50');
+    expect(result['total'], 1);
+    expect(result['data'].length, 1);
+    expect(result['data'][0]['order_id'], 'order-1');
+    expect(result['data'][0]['hub']['code'], 'HUB-01');
+  });
+
+  test('listOrders passes query and hub_id filters', () async {
+    http.Request? captured;
+    final api = OrdersApi(
+      baseUrl: 'https://api.example.test',
+      client: MockClient((request) async {
+        captured = request;
+        return http.Response(
+          jsonEncode({
+            'data': [],
+            'total': 0,
+            'page': 1,
+            'per_page': 20,
+            'total_pages': 1,
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    await api.listOrders(
+      page: 2,
+      perPage: 20,
+      hubId: 'hub-x',
+      query: 'order-1',
+    );
+
+    expect(captured!.url.queryParameters['page'], '2');
+    expect(captured!.url.queryParameters['per_page'], '20');
+    expect(captured!.url.queryParameters['hub_id'], 'hub-x');
+    expect(captured!.url.queryParameters['q'], 'order-1');
+  });
+
+  test('listOrders throws on HTTP error', () async {
+    final api = OrdersApi(
+      baseUrl: 'https://api.example.test',
+      client: MockClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'error': 'ORDER_STORAGE_ERROR',
+            'message': 'Não foi possível consultar os pedidos.',
+          }),
+          500,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    expect(
+      () => api.listOrders(),
+      throwsA(isA<OrdersApiException>().having(
+        (e) => e.statusCode,
+        'statusCode',
+        500,
+      )),
+    );
+  });
+
+  test('listOrders returns empty list when API has no orders', () async {
+    final api = OrdersApi(
+      baseUrl: 'https://api.example.test',
+      client: MockClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'data': [],
+            'total': 0,
+            'page': 1,
+            'per_page': 50,
+            'total_pages': 1,
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    final result = await api.listOrders();
+    expect(result['total'], 0);
+    expect(result['data'], isEmpty);
+  });
 }
