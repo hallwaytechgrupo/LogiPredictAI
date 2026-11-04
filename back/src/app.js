@@ -60,6 +60,30 @@ export function createApp({
   const app = express();
   app.disable('x-powered-by');
   app.use(helmet());
+
+  // Permitir chamadas do Flutter Web durante o desenvolvimento local.
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+
+    if (origin && /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.vary('Origin');
+      res.setHeader(
+        'Access-Control-Allow-Methods',
+        'GET, POST, PUT, PATCH, DELETE, OPTIONS'
+      );
+      res.setHeader(
+        'Access-Control-Allow-Headers',
+        'Content-Type, Accept'
+      );
+
+      if (req.method === 'OPTIONS') {
+        return res.sendStatus(204);
+      }
+    }
+
+    next();
+  });
   app.use('/api/v1/predictions/batch', express.json({ limit: '10mb', strict: true }));
   app.use(express.json({ limit: '2mb', strict: true }));
   // Fila de serialização: garante que mutações em orders.json sejam executadas sequencialmente,
