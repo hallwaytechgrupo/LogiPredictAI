@@ -1,0 +1,27 @@
+name: logipredict_ai
+description: Aplicativo Flutter LogiPredict AI para simulacao de risco logistico.
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_map: ^7.0.2
+  flutter_map_geojson2: ^1.0.2
+  latlong2: ^0.9.1
+  fl_chart: ^0.69.2
+  http: ^1.6.0
+  file_picker: ^11.0.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/geojson/brazil_regions.geojson

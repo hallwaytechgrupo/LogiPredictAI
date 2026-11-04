@@ -1,0 +1,2 @@
+order_id,seller_state,customer_state,purchase_at,dispatched_at,estimated_delivery_at,total_weight_g,price,freight_value,items_count,sellers_count,total_volume_cm3
+EXEMPLO-NAO-REAL,SP,BA,2018-01-10 10:00:00,2018-01-11 09:00:00,2018-01-20 00:00:00,2500,350.00,35.00,1,1,
