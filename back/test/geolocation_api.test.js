@@ -16,7 +16,8 @@ test('resolves CEP prefixes from the training geolocation source and returns the
     '02000,-22.9,-43.2,rio de janeiro,RJ',
     '',
   ].join('\n'));
-  const server = createApp({ geolocationFile }).listen(0);
+  const app = await createApp({ geolocationFile });
+  const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   t.after(async () => {
     await new Promise((resolve, reject) =>
@@ -80,9 +81,10 @@ test('resolves CEP prefixes from the training geolocation source and returns the
 
 test('reports the geolocation source as unavailable rather than using a fallback', async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'logipredict-geo-missing-'));
-  const server = createApp({
+  const app = await createApp({
     geolocationFile: path.join(directory, 'missing.csv'),
-  }).listen(0);
+  });
+  const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   t.after(async () => {
     await new Promise((resolve, reject) =>

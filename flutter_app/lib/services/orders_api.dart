@@ -145,17 +145,20 @@ class OrdersApi {
   /// [perPage] controla o número de itens por página (padrão 50, máximo 500).
   /// [hubId] filtra por hub associado.
   /// [query] filtra por texto contido no order_id.
+  /// [source] filtra por origem dos dados (ex: 'operational').
   Future<Map<String, dynamic>> listOrders({
     int page = 1,
     int perPage = 50,
     String? hubId,
     String? query,
+    String? source,
   }) async {
     final queryParams = <String, String>{
       'page': page.toString(),
       'per_page': perPage.toString(),
       if (hubId != null) 'hub_id': hubId,
       if (query != null && query.isNotEmpty) 'q': query,
+      if (source != null && source.isNotEmpty) 'source': source,
     };
     final uri = Uri.parse('$_baseUrl/api/v1/orders')
         .replace(queryParameters: queryParams);
@@ -207,5 +210,30 @@ class OrdersApi {
       },
     );
     return response;
+  }
+
+  /// Importa pedidos operacionais a partir de CSV completo.
+  ///
+  /// [csvContent] é o conteúdo textual do CSV.
+  /// Retorna um mapa com: imported, ignored, failed, data.
+  Future<Map<String, dynamic>> importCsv(String csvContent) async {
+    final response = await _request(
+      'POST',
+      '/api/v1/orders/import-csv',
+      body: {'csv': csvContent},
+    );
+    return response;
+  }
+
+  /// Retorna resumo dos pedidos operacionais.
+  ///
+  /// Retorna um mapa com: total, withHub, withoutHub, withPrediction.
+  Future<Map<String, dynamic>> summary() async {
+    final response = await _request('GET', '/api/v1/orders/summary');
+    final data = response['data'];
+    if (data is! Map<String, dynamic>) {
+      throw const OrdersApiException('A resposta não contém o resumo.');
+    }
+    return data;
   }
 }

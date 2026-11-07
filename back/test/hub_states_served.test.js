@@ -23,7 +23,8 @@ async function setup() {
   await writeFile(ordersFile, '[]');
   await writeFile(predictionsFile, '[]');
   await writeFile(journalFile, '');
-  server = createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile }).listen(0);
+  const app = await createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile });
+  server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   baseUrl = `http://127.0.0.1:${server.address().port}`;
 }

@@ -2503,9 +2503,9 @@
     "justification": "Seleção preliminar de localidades; validar instalação logística e coordenadas antes de ativar",
     "latitude": null,
     "longitude": null,
-    "status": "candidate",
+    "status": "active",
     "createdAt": "2026-11-02T01:08:10.131Z",
-    "updatedAt": "2026-11-02T02:54:58.468Z",
+    "updatedAt": "2026-11-06T22:23:33.652Z",
     "statesServed": null
   }
 ]

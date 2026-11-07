@@ -12,7 +12,8 @@ test('GET /api/v1/orders returns empty list when no orders exist', async (t) => 
   await writeFile(hubsFile, '[]');
   await writeFile(ordersFile, '[]');
 
-  const server = createApp({ hubsFile, ordersFile }).listen(0);
+  const app = await createApp({ hubsFile, ordersFile });
+  const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => {
@@ -57,7 +58,8 @@ test('GET /api/v1/orders returns paginated orders with hub enrichment', async (t
   }
   await writeFile(ordersFile, JSON.stringify(orders));
 
-  const server = createApp({ hubsFile, ordersFile }).listen(0);
+  const app = await createApp({ hubsFile, ordersFile });
+  const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => {
@@ -136,7 +138,8 @@ test('GET /api/v1/orders rejects invalid pagination parameters', async (t) => {
   await writeFile(hubsFile, '[]');
   await writeFile(ordersFile, '[]');
 
-  const server = createApp({ hubsFile, ordersFile }).listen(0);
+  const app = await createApp({ hubsFile, ordersFile });
+  const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => {
@@ -193,7 +196,8 @@ test('GET /api/v1/orders returns 500 on storage error', async (t) => {
   // Write invalid JSON to trigger parse error
   await writeFile(ordersFile, '{invalid json');
 
-  const server = createApp({ hubsFile, ordersFile }).listen(0);
+  const app = await createApp({ hubsFile, ordersFile });
+  const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => {

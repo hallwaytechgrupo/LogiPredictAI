@@ -226,6 +226,10 @@ class _HubsManagementScreenState extends State<HubsManagementScreen> {
     final code = TextEditingController(text: hub?.code ?? '');
     final name = TextEditingController(text: hub?.name ?? '');
     final city = TextEditingController(text: hub?.city ?? '');
+    final latitude = TextEditingController(
+        text: hub?.latitude != null ? hub!.latitude.toString() : '');
+    final longitude = TextEditingController(
+        text: hub?.longitude != null ? hub!.longitude.toString() : '');
     String state = hub?.state ?? 'SP';
     final validationStatus = hub?.validationStatus ?? 'APROVADO';
     const allStates = [
@@ -303,6 +307,71 @@ class _HubsManagementScreenState extends State<HubsManagementScreen> {
                               (v ?? '').trim().length >= 2
                           ? null
                           : 'Informe a cidade antes de aprovar.',
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Coordenadas geográficas',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Informe a latitude e longitude para que o hub apareça no mapa. '
+                      'Se deixar vazio, o hub não será exibido no Mapa de Calor Logístico.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: latitude,
+                            keyboardType: const TextInputType.numberWithOptions(
+                                signed: true, decimal: true),
+                            decoration: const InputDecoration(
+                              labelText: 'Latitude',
+                              hintText: '-23.5505',
+                            ),
+                            validator: (v) {
+                              if ((v ?? '').trim().isEmpty) return null;
+                              final parsed = double.tryParse(v!.trim());
+                              if (parsed == null ||
+                                  parsed < -90 ||
+                                  parsed > 90) {
+                                return 'Valor entre -90 e 90.';
+                              }
+                              return null;
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextFormField(
+                            controller: longitude,
+                            keyboardType: const TextInputType.numberWithOptions(
+                                signed: true, decimal: true),
+                            decoration: const InputDecoration(
+                              labelText: 'Longitude',
+                              hintText: '-46.6333',
+                            ),
+                            validator: (v) {
+                              if ((v ?? '').trim().isEmpty) return null;
+                              final parsed = double.tryParse(v!.trim());
+                              if (parsed == null ||
+                                  parsed < -180 ||
+                                  parsed > 180) {
+                                return 'Valor entre -180 e 180.';
+                              }
+                              return null;
+                            },
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
@@ -396,12 +465,20 @@ class _HubsManagementScreenState extends State<HubsManagementScreen> {
       try {
         final statesServedList =
             selectedStates.isNotEmpty ? selectedStates.toList() : null;
+        final lat = latitude.text.trim().isEmpty
+            ? null
+            : double.tryParse(latitude.text.trim());
+        final lng = longitude.text.trim().isEmpty
+            ? null
+            : double.tryParse(longitude.text.trim());
         if (hub == null) {
           await _api.create(
               code: code.text.trim().toUpperCase(),
               name: name.text.trim(),
               city: city.text.trim(),
               state: state,
+              latitude: lat,
+              longitude: lng,
               statesServed: statesServedList);
         } else {
           await _api.update(hub,
@@ -409,6 +486,8 @@ class _HubsManagementScreenState extends State<HubsManagementScreen> {
               name: name.text.trim(),
               city: city.text.trim(),
               state: state,
+              latitude: lat,
+              longitude: lng,
               statesServed: statesServedList);
         }
         _snack(hub == null ? 'Hub cadastrado.' : 'Hub atualizado.');
@@ -420,6 +499,8 @@ class _HubsManagementScreenState extends State<HubsManagementScreen> {
     code.dispose();
     name.dispose();
     city.dispose();
+    latitude.dispose();
+    longitude.dispose();
   }
 
   Future<void> _toggle(LogisticHub hub) async {

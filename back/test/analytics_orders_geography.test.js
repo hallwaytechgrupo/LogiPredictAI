@@ -37,7 +37,7 @@ async function makeHarness(t, { ordersCsv, customersCsv, geolocationCsv } = {}) 
   }).listen(0);
   await new Promise((resolve) => mlServer.once('listening', resolve));
 
-  const apiServer = createApp({
+  const apiApp = await createApp({
     mlUrl: `http://127.0.0.1:${mlServer.address().port}`,
     timeoutMs: 1000,
     hubsFile,
@@ -46,7 +46,8 @@ async function makeHarness(t, { ordersCsv, customersCsv, geolocationCsv } = {}) 
     olistOrdersFile,
     olistCustomersFile,
     geolocationFile,
-  }).listen(0);
+  });
+  const apiServer = apiApp.listen(0);
   await new Promise((resolve) => apiServer.once('listening', resolve));
 
   const baseUrl = `http://127.0.0.1:${apiServer.address().port}`;

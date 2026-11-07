@@ -25,7 +25,8 @@ test('cleanup: dry-run shows orders and predictions to remove', async (t) => {
     JSON.stringify({ prediction_id: 'p3', order_id: 'manual-001', hub_id: null, delay_probability: 0.8, predicted_late: true, threshold: 0.37, model_version: 'v1', source: 'ml', warnings: [], predicted_at: '2025-01-01T00:00:00.000Z' }),
   ].join('\n') + '\n');
 
-  const server = createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile }).listen(0);
+  const app = await createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile });
+  const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => {
@@ -68,7 +69,8 @@ test('cleanup: requires confirmation to execute', async (t) => {
   await writeFile(predictionsFile, '[]');
   await writeFile(journalFile, '');
 
-  const server = createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile }).listen(0);
+  const app = await createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile });
+  const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => {
@@ -107,7 +109,8 @@ test('cleanup: executes cleanup with confirmation', async (t) => {
     JSON.stringify({ prediction_id: 'p3', order_id: 'manual-001', hub_id: null, delay_probability: 0.8, predicted_late: true, threshold: 0.37, model_version: 'v1', source: 'ml', warnings: [], predicted_at: '2025-01-01T00:00:00.000Z' }),
   ].join('\n') + '\n');
 
-  const server = createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile }).listen(0);
+  const app = await createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile });
+  const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => {
@@ -149,7 +152,8 @@ test('cleanup: rejects missing source', async (t) => {
   await writeFile(hubsFile, '[]');
   await writeFile(ordersFile, '[]');
 
-  const server = createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile }).listen(0);
+  const app = await createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile });
+  const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => {
@@ -185,7 +189,8 @@ test('cleanup: preserves predictions.json when it exists', async (t) => {
   ]));
   await writeFile(journalFile, '');
 
-  const server = createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile }).listen(0);
+  const app = await createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile });
+  const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => {
@@ -220,7 +225,8 @@ test('cleanup: removes all orders and predictions when all match source', async 
   await writeFile(predictionsFile, '[]');
   await writeFile(journalFile, JSON.stringify({ prediction_id: 'p1', order_id: 'olist-001', hub_id: null, delay_probability: 0.5, predicted_late: true, threshold: 0.37, model_version: 'v1', source: 'ml', warnings: [], predicted_at: '2025-01-01T00:00:00.000Z' }) + '\n');
 
-  const server = createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile }).listen(0);
+  const app = await createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile });
+  const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => {
@@ -259,7 +265,8 @@ test('cleanup: source matching is case-insensitive', async (t) => {
   await writeFile(predictionsFile, '[]');
   await writeFile(journalFile, '');
 
-  const server = createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile }).listen(0);
+  const app = await createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile });
+  const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => {
@@ -293,7 +300,8 @@ test('cleanup: does not remove orders without matching source', async (t) => {
   await writeFile(predictionsFile, '[]');
   await writeFile(journalFile, '');
 
-  const server = createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile }).listen(0);
+  const app = await createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile });
+  const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => {
@@ -324,7 +332,8 @@ test('import with source field marks orders correctly', async (t) => {
   await writeFile(hubsFile, '[]');
   await writeFile(ordersFile, '[]');
 
-  const server = createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile }).listen(0);
+  const app = await createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile });
+  const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => {
@@ -367,7 +376,8 @@ test('import without source field does not set source', async (t) => {
   await writeFile(hubsFile, '[]');
   await writeFile(ordersFile, '[]');
 
-  const server = createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile }).listen(0);
+  const app = await createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile });
+  const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => {

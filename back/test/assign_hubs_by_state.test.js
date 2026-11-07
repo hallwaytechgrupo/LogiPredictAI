@@ -40,7 +40,8 @@ test('assign-hubs-by-state: dry run with single hub per state', async (t) => {
     { order_id: 'order-mg-001', hub_id: 'hub-sp-001', createdAt: '2025-01-01T00:00:00.000Z', updatedAt: '2025-01-01T00:00:00.000Z' },
   ]));
 
-  const server = createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile }).listen(0);
+  const app = await createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile });
+  const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => {
@@ -104,7 +105,8 @@ test('assign-hubs-by-state: dry run with multiple hubs per state distributes det
   await writeFile(hubsFile, JSON.stringify(hubsSp));
   await writeFile(ordersFile, '[]');
 
-  const server = createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile }).listen(0);
+  const app = await createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile });
+  const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => {
@@ -168,7 +170,8 @@ test('assign-hubs-by-state: state without hub coverage reports unassigned', asyn
   }]));
   await writeFile(ordersFile, '[]');
 
-  const server = createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile }).listen(0);
+  const app = await createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile });
+  const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => {
@@ -211,7 +214,8 @@ test('assign-hubs-by-state: rejects invalid customer_state', async (t) => {
   await writeFile(hubsFile, '[]');
   await writeFile(ordersFile, '[]');
 
-  const server = createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile }).listen(0);
+  const app = await createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile });
+  const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => {
@@ -242,7 +246,8 @@ test('assign-hubs-by-state: rejects invalid order_id', async (t) => {
   await writeFile(hubsFile, '[]');
   await writeFile(ordersFile, '[]');
 
-  const server = createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile }).listen(0);
+  const app = await createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile });
+  const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => {
@@ -297,7 +302,8 @@ test('assign-hubs-by-state: applies assignment and updates orders', async (t) =>
     { order_id: 'order-mg-001', hub_id: 'hub-sp-001', createdAt: '2025-01-01T00:00:00.000Z', updatedAt: '2025-01-01T00:00:00.000Z' },
   ]));
 
-  const server = createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile }).listen(0);
+  const app = await createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile });
+  const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => {
@@ -352,7 +358,8 @@ test('assign-hubs-by-state: idempotent — running twice produces same result', 
     { order_id: 'order-001', hub_id: null, createdAt: '2025-01-01T00:00:00.000Z', updatedAt: '2025-01-01T00:00:00.000Z' },
   ]));
 
-  const server = createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile }).listen(0);
+  const app = await createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile });
+  const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => {
@@ -429,7 +436,8 @@ test('assign-hubs-by-state: reports orders with existing predictions', async (t)
     predicted_at: '2025-01-01T00:00:00.000Z',
   }]));
 
-  const server = createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile }).listen(0);
+  const app = await createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile });
+  const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => {
@@ -473,7 +481,8 @@ test('assign-hubs-by-state: skips orders not yet imported', async (t) => {
   await writeFile(hubsFile, JSON.stringify([hubSp]));
   await writeFile(ordersFile, '[]'); // No orders imported
 
-  const server = createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile }).listen(0);
+  const app = await createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile });
+  const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => {
@@ -506,7 +515,8 @@ test('assign-hubs-by-state: rejects empty order list', async (t) => {
   await writeFile(hubsFile, '[]');
   await writeFile(ordersFile, '[]');
 
-  const server = createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile }).listen(0);
+  const app = await createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile });
+  const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => {
@@ -557,7 +567,8 @@ test('assign-hubs-by-state: only approved hubs are eligible', async (t) => {
   ]));
   await writeFile(ordersFile, '[]');
 
-  const server = createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile }).listen(0);
+  const app = await createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile });
+  const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => {
@@ -611,7 +622,8 @@ test('assign-hubs-by-state: distribution summary is correct', async (t) => {
   await writeFile(hubsFile, JSON.stringify([hubSp, hubMg]));
   await writeFile(ordersFile, '[]');
 
-  const server = createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile }).listen(0);
+  const app = await createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile });
+  const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => {
@@ -683,7 +695,8 @@ test('assign-hubs-by-state: state_counts and hub_counts are returned', async (t)
   await writeFile(hubsFile, JSON.stringify([hubSp, hubMg]));
   await writeFile(ordersFile, '[]');
 
-  const server = createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile }).listen(0);
+  const app = await createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile });
+  const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => {
@@ -756,7 +769,8 @@ test('assign-hubs-by-state: case insensitive customer_state normalization', asyn
   await writeFile(hubsFile, JSON.stringify([hubSp]));
   await writeFile(ordersFile, '[]');
 
-  const server = createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile }).listen(0);
+  const app = await createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile });
+  const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => {
@@ -800,7 +814,8 @@ test('assign-hubs-by-state: report totals are consistent', async (t) => {
   await writeFile(hubsFile, JSON.stringify([hubSp]));
   await writeFile(ordersFile, '[]');
 
-  const server = createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile }).listen(0);
+  const app = await createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile });
+  const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => {
@@ -862,7 +877,8 @@ test('assign-hubs-by-state: multiple hubs per state — balanced distribution pe
   await writeFile(hubsFile, JSON.stringify(hubs));
   await writeFile(ordersFile, '[]');
 
-  const server = createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile }).listen(0);
+  const app = await createApp({ hubsFile, ordersFile, predictionsFile, predictionJournalFile: journalFile });
+  const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => {

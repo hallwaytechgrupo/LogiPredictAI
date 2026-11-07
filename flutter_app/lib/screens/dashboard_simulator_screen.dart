@@ -2,30 +2,16 @@ part of 'dashboard_screen.dart';
 
 extension _DashboardSimulatorScreen on _DashboardScreenState {
   Widget _buildSimulator() {
-    return LayoutBuilder(builder: (context, constraints) {
-      final wide = constraints.maxWidth >= 950;
-      return SingleChildScrollView(
-        padding: const EdgeInsets.all(22),
-        child: wide
-            ? Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                      width: constraints.maxWidth * .43,
-                      child: _buildFormCard()),
-                  const SizedBox(width: 22),
-                  Expanded(child: _buildResults()),
-                ],
-              )
-            : Column(
-                children: [
-                  _buildFormCard(),
-                  const SizedBox(height: 18),
-                  _buildResults(),
-                ],
-              ),
-      );
-    });
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(22),
+      child: Column(
+        children: [
+          _buildFormCard(),
+          const SizedBox(height: 18),
+          _buildResults(),
+        ],
+      ),
+    );
   }
 
   Widget _buildFormCard() {
@@ -71,14 +57,16 @@ extension _DashboardSimulatorScreen on _DashboardScreenState {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            _buildOrderSelection(),
+            const SizedBox(height: 12),
             const _SectionTitle(
               icon: Icons.tune,
-              title: 'Parâmetros do Despacho',
-              subtitle: 'Uma simulação por pedido, no momento do despacho.',
+              title: 'Dados do Pedido',
+              subtitle: 'Preencha os dados para previsão de atraso e simulação de despacho.',
             ),
             const SizedBox(height: 8),
             Text(
-              'A distância é calculada em linha reta a partir da geolocalização Olist por prefixo de CEP (5 dígitos). Para pedidos com vários vendedores, informe um CEP de origem por vendedor; o primeiro define a UF de origem.',
+              'Os CEPs alimentam a previsão de atraso e a identificação automática dos hubs de origem e destino. Para pedidos com vários vendedores, informe um CEP por vendedor; o primeiro CEP de origem será usado para o despacho.',
               style: TextStyle(fontSize: 12, color: _secondaryText),
             ),
             const SizedBox(height: 18),
@@ -213,8 +201,8 @@ extension _DashboardSimulatorScreen on _DashboardScreenState {
               label: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 13),
                 child: Text(_isAnalyzing
-                    ? 'Resolvendo localização e consultando o modelo...'
-                    : 'Simular risco de atraso'),
+                    ? 'Executando simulação logística...'
+                    : 'Simular operação logística'),
               ),
             ),
           ],
@@ -228,86 +216,92 @@ extension _DashboardSimulatorScreen on _DashboardScreenState {
     final response = current?['response'] as Map<String, dynamic>?;
     final currentSource = response?['source']?.toString();
     final scenario = current ?? _lastAttempt;
+
     return Column(
       children: [
+        // ===== PREDICTION PANEL =====
         _card(
-          child: LayoutBuilder(builder: (context, constraints) {
-            final compact = constraints.maxWidth < 420;
-            final description = Column(
-              crossAxisAlignment: compact
-                  ? CrossAxisAlignment.center
-                  : CrossAxisAlignment.start,
-              children: [
-                Text('RESULTADO DA SIMULAÇÃO',
-                    style: TextStyle(
-                        fontSize: 11,
-                        letterSpacing: 1,
-                        color: _secondaryText,
-                        fontWeight: FontWeight.bold)),
-                const SizedBox(height: 7),
-                Text(_riskTitle,
-                    textAlign: compact ? TextAlign.center : TextAlign.start,
-                    style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        color: _riskColor)),
-                const SizedBox(height: 8),
-                Text(_riskDescription,
-                    textAlign: compact ? TextAlign.center : TextAlign.start,
-                    style: TextStyle(
-                        fontSize: 13, color: _secondaryText, height: 1.45)),
-              ],
-            );
-            final score = Container(
-              width: 132,
-              height: 132,
-              decoration: BoxDecoration(
-                  color: _surfaceAlt,
-                  border: Border.all(color: _border),
-                  borderRadius: BorderRadius.circular(16)),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    _riskProbability == null
-                        ? '—'
-                        : '${(_riskProbability! * 100).toStringAsFixed(1)}%',
-                    style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.w900,
-                        color: _riskColor),
-                  ),
-                  Text(
-                      _riskProbability == null
-                          ? 'SEM PREVISÃO'
-                          : 'PROBABILIDADE',
-                      style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: _secondaryText)),
-                ],
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Previsão de Atraso',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
               ),
-            );
-            return compact
-                ? Column(
-                    children: [description, const SizedBox(height: 18), score])
-                : Row(children: [
-                    Expanded(child: description),
-                    const SizedBox(width: 18),
-                    score
-                  ]);
-          }),
-        ),
-        if (response != null) ...[
-          const SizedBox(height: 12),
-          _card(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Retorno do modelo',
-                    style:
-                        TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              LayoutBuilder(builder: (context, constraints) {
+                final compact = constraints.maxWidth < 420;
+                final description = Column(
+                  crossAxisAlignment: compact
+                      ? CrossAxisAlignment.center
+                      : CrossAxisAlignment.start,
+                  children: [
+                    Text('RESULTADO DA SIMULAÇÃO',
+                        style: TextStyle(
+                            fontSize: 11,
+                            letterSpacing: 1,
+                            color: _secondaryText,
+                            fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 7),
+                    Text(_riskTitle,
+                        textAlign: compact ? TextAlign.center : TextAlign.start,
+                        style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                            color: _riskColor)),
+                    const SizedBox(height: 8),
+                    Text(_riskDescription,
+                        textAlign: compact ? TextAlign.center : TextAlign.start,
+                        style: TextStyle(
+                            fontSize: 13, color: _secondaryText, height: 1.45)),
+                  ],
+                );
+                final score = Container(
+                  width: 132,
+                  height: 132,
+                  decoration: BoxDecoration(
+                      color: _surfaceAlt,
+                      border: Border.all(color: _border),
+                      borderRadius: BorderRadius.circular(16)),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        _riskProbability == null
+                            ? '—'
+                            : '${(_riskProbability! * 100).toStringAsFixed(1)}%',
+                        style: TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.w900,
+                            color: _riskColor),
+                      ),
+                      Text(
+                          _riskProbability == null
+                              ? 'SEM PREVISÃO'
+                              : 'PROBABILIDADE',
+                          style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: _secondaryText)),
+                    ],
+                  ),
+                );
+                return compact
+                    ? Column(
+                        children: [description, const SizedBox(height: 18), score])
+                    : Row(children: [
+                        Expanded(child: description),
+                        const SizedBox(width: 18),
+                        score
+                      ]);
+              }),
+              if (response != null) ...[
+                const SizedBox(height: 14),
+                const Divider(height: 16),
                 const SizedBox(height: 8),
+                const Text('Retorno do modelo',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 6),
                 Text(
                     'Decisão: ${_predictedLate == true ? 'risco acima do limiar' : 'risco abaixo do limiar'}'),
                 Text(
@@ -323,30 +317,508 @@ extension _DashboardSimulatorScreen on _DashboardScreenState {
                     ),
                   ),
                 if (_warnings.isNotEmpty) ...[
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   ..._warnings.map((warning) => Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
+                        padding: const EdgeInsets.only(bottom: 3),
                         child: Text('Aviso: $warning',
-                            style:
-                                TextStyle(fontSize: 12, color: _secondaryText)),
+                            style: TextStyle(fontSize: 12, color: _secondaryText)),
                       )),
                 ],
               ],
-            ),
+            ],
           ),
+        ),
+
+        // ===== DISPATCH PANEL =====
+        const SizedBox(height: 18),
+        _buildDispatchPanel(),
+
+        // ===== INTEGRATED MAP =====
+        if (_dispatchResult != null || _dispatchError != null) ...[
+          const SizedBox(height: 18),
+          _buildDispatchMap(),
         ],
-        if (scenario != null)
+
+        // ===== SCENARIO DETAILS (legacy) =====
+        if (scenario != null) ...[
+          const SizedBox(height: 18),
           _scenarioCard(
             scenario,
             title: current == null
                 ? 'Parâmetros da tentativa atual'
                 : 'Parâmetros enviados nesta simulação',
           ),
+        ],
         if (_previousScenario != null) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: 18),
           _comparisonCard(current),
         ],
       ],
+    );
+  }
+
+  /// Dispatch results panel with hub cards, distances and warnings.
+  Widget _buildDispatchPanel() {
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Despacho entre Hubs',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Os hubs de origem e destino são selecionados automaticamente com base nos CEPs informados.',
+            style: TextStyle(fontSize: 12, color: _secondaryText),
+          ),
+          const SizedBox(height: 12),
+
+          // Loading state
+          if (_dispatchLoading)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24.0),
+                child: CircularProgressIndicator(),
+              ),
+            ),
+
+          // Error state
+          if (!_dispatchLoading && _dispatchError != null && _dispatchResult == null)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red.shade200),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.red),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _dispatchError!,
+                      style: const TextStyle(color: Colors.red, fontSize: 13),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          // Success state
+          if (_dispatchResult != null) _buildDispatchResults(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDispatchResults() {
+    final data = _dispatchResult!;
+    final origin = data['origin'] as Map<String, dynamic>? ?? {};
+    final dest = data['destination'] as Map<String, dynamic>? ?? {};
+    final originHub = data['origin_hub'] as Map<String, dynamic>? ?? {};
+    final destHub = data['destination_hub'] as Map<String, dynamic>? ?? {};
+    final distances = data['distances'] as Map<String, dynamic>? ?? {};
+    final sameHub = data['same_hub'] as bool? ?? false;
+    final warnings = data['warnings'] as List? ?? [];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Same hub warning
+        if (sameHub)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: Colors.orange.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.orange.shade200),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.warning_amber, color: Colors.orange),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Origem e destino estão associados ao mesmo hub: ${originHub['name'] ?? originHub['id']}',
+                    style: const TextStyle(color: Colors.orange, fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+        // Hub cards
+        LayoutBuilder(builder: (context, constraints) {
+          final sideBySide = constraints.maxWidth > 500;
+          return sideBySide
+              ? Row(
+                  children: [
+                    Expanded(
+                      child: _hubCard('Hub de Origem', originHub, Colors.blue),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _hubCard('Hub de Destino', destHub, Colors.green),
+                    ),
+                  ],
+                )
+              : Column(
+                  children: [
+                    _hubCard('Hub de Origem', originHub, Colors.blue),
+                    const SizedBox(height: 8),
+                    _hubCard('Hub de Destino', destHub, Colors.green),
+                  ],
+                );
+        }),
+
+        const SizedBox(height: 12),
+
+        // Distances
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: _surfaceAlt,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: _border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Distâncias',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const SizedBox(height: 6),
+              // Use hub names in distance labels
+              _distanceRow(
+                'CEP de origem → ${originHub['name']?.toString() ?? originHub['code']?.toString() ?? 'Hub origem'}',
+                distances['origin_to_origin_hub_km'],
+              ),
+              _distanceRow(
+                'CEP de destino → ${destHub['name']?.toString() ?? destHub['code']?.toString() ?? 'Hub destino'}',
+                distances['destination_to_dest_hub_km'],
+              ),
+              _distanceRow(
+                '${originHub['name']?.toString() ?? originHub['code']?.toString() ?? 'Hub origem'} → ${destHub['name']?.toString() ?? destHub['code']?.toString() ?? 'Hub destino'}',
+                distances['hub_to_hub_haversine_km'],
+                subtitle: 'Distância geográfica (Haversine)',
+              ),
+              if (distances['route_distance_km'] != null)
+                _distanceRow(
+                  'Rota rodoviária',
+                  distances['route_distance_km'],
+                  color: Colors.green,
+                  subtitle: 'Calculada via OpenRouteService',
+                ),
+              if (distances['route_duration_seconds'] != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    'Tempo estimado: ${_formatDuration(distances['route_duration_seconds'])}',
+                    style: TextStyle(color: _secondaryText, fontSize: 13),
+                  ),
+                ),
+            ],
+          ),
+        ),
+
+        // Warnings — improved to distinguish Haversine vs road distance
+        if (warnings.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Avisos',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                ...warnings.map((w) {
+                  final text = w.toString();
+                  // Improve the OpenRouteService key missing warning
+                  if (text.contains('OPENROUTE') || text.contains('OpenRouteService não configurada')) {
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 4, left: 8),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('• ', style: TextStyle(color: Colors.orange, fontSize: 12)),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Rota rodoviária indisponível',
+                                  style: TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.w500),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'A chave API do OpenRouteService não está configurada. A distância entre hubs apresentada é geográfica (Haversine), em linha reta, e não representa a distância rodoviária real.',
+                                  style: const TextStyle(color: Colors.orange, fontSize: 11),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                  // Improve the Haversine fallback warning
+                  if (text.contains('Haversine') || text.contains('linha reta')) {
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 4, left: 8),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('• ', style: TextStyle(color: Colors.orange, fontSize: 12)),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Distância geográfica (Haversine)',
+                                  style: TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.w500),
+                                ),
+                                const SizedBox(height: 2),
+                                const Text(
+                                  'A distância entre hubs é calculada em linha reta. A rota rodoviária não pôde ser calculada porque o serviço de roteamento está indisponível.',
+                                  style: TextStyle(color: Colors.orange, fontSize: 11),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                  // Generic warning
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 3, left: 8),
+                    child: Text(
+                      '• $text',
+                      style: const TextStyle(color: Colors.orange, fontSize: 12),
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _hubCard(String title, Map<String, dynamic> hub, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _surfaceAlt,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 13)),
+          const SizedBox(height: 4),
+          Text(hub['name']?.toString() ?? 'N/A',
+              style: const TextStyle(fontWeight: FontWeight.w500)),
+          Text('${hub['city'] ?? ''}, ${hub['state'] ?? ''}',
+              style: const TextStyle(fontSize: 12)),
+          Text('ID: ${hub['id'] ?? ''}',
+              style: TextStyle(fontSize: 11, color: _secondaryText)),
+        ],
+      ),
+    );
+  }
+
+  Widget _distanceRow(String label, dynamic value, {Color? color, String? subtitle}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 1.5),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label, style: TextStyle(fontSize: 13, color: _secondaryText)),
+                    if (subtitle != null)
+                      Text(subtitle, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                  ],
+                ),
+              ),
+              Text(
+                value != null ? '${(value as num).toDouble().toStringAsFixed(2)} km' : 'N/A',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: color ?? _primaryText,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatDuration(dynamic seconds) {
+    if (seconds == null) return 'N/A';
+    final s = seconds as int;
+    final hours = s ~/ 3600;
+    final mins = (s % 3600) ~/ 60;
+    if (hours > 0) return '${hours}h ${mins}min';
+    return '${mins}min';
+  }
+
+  /// Integrated map showing origin, destination, hubs and route.
+  Widget _buildDispatchMap() {
+    if (_dispatchResult == null) {
+      return const SizedBox.shrink();
+    }
+
+    final data = _dispatchResult!;
+    final origin = data['origin'] as Map<String, dynamic>? ?? {};
+    final dest = data['destination'] as Map<String, dynamic>? ?? {};
+    final originHub = data['origin_hub'] as Map<String, dynamic>? ?? {};
+    final destHub = data['destination_hub'] as Map<String, dynamic>? ?? {};
+    final routeData = data['route'] as Map<String, dynamic>?;
+
+    final markers = <Marker>[];
+
+    // Origin location
+    if (origin.isNotEmpty && origin['latitude'] != null && origin['longitude'] != null) {
+      markers.add(Marker(
+        point: LatLng(
+          (origin['latitude'] as num).toDouble(),
+          (origin['longitude'] as num).toDouble(),
+        ),
+        child: const Icon(Icons.location_on, color: Colors.grey, size: 30),
+      ));
+    }
+    // Destination location
+    if (dest.isNotEmpty && dest['latitude'] != null && dest['longitude'] != null) {
+      markers.add(Marker(
+        point: LatLng(
+          (dest['latitude'] as num).toDouble(),
+          (dest['longitude'] as num).toDouble(),
+        ),
+        child: const Icon(Icons.location_on, color: Colors.purple, size: 30),
+      ));
+    }
+    // Origin hub
+    if (originHub.isNotEmpty && originHub['latitude'] != null && originHub['longitude'] != null) {
+      markers.add(Marker(
+        point: LatLng(
+          (originHub['latitude'] as num).toDouble(),
+          (originHub['longitude'] as num).toDouble(),
+        ),
+        child: const Icon(Icons.local_shipping, color: Colors.blue, size: 36),
+      ));
+    }
+    // Destination hub
+    if (destHub.isNotEmpty && destHub['latitude'] != null && destHub['longitude'] != null) {
+      markers.add(Marker(
+        point: LatLng(
+          (destHub['latitude'] as num).toDouble(),
+          (destHub['longitude'] as num).toDouble(),
+        ),
+        child: const Icon(Icons.local_shipping, color: Colors.green, size: 36),
+      ));
+    }
+
+    // Route polyline from OpenRouteService geometry
+    final polylines = <Polyline>[];
+    if (routeData != null && routeData['geometry'] != null) {
+      final geometry = routeData['geometry'];
+      if (geometry is Map<String, dynamic> && geometry['coordinates'] is List) {
+        final coords = (geometry['coordinates'] as List)
+            .whereType<List<num>>()
+            .map((c) => LatLng(c[1].toDouble(), c[0].toDouble()))
+            .toList();
+        if (coords.length >= 2) {
+          polylines.add(Polyline(
+            points: coords,
+            color: Colors.indigo,
+            strokeWidth: 4,
+          ));
+        }
+      }
+    }
+
+    // Calculate initial center and zoom from all points
+    LatLng center = const LatLng(-14.235, -51.9253);
+    double zoom = 4;
+    final allPoints = <LatLng>[];
+    if (originHub.isNotEmpty && originHub['latitude'] != null) {
+      allPoints.add(LatLng(
+        (originHub['latitude'] as num).toDouble(),
+        (originHub['longitude'] as num).toDouble(),
+      ));
+    }
+    if (destHub.isNotEmpty && destHub['latitude'] != null) {
+      allPoints.add(LatLng(
+        (destHub['latitude'] as num).toDouble(),
+        (destHub['longitude'] as num).toDouble(),
+      ));
+    }
+    if (allPoints.isNotEmpty) {
+      center = allPoints.first;
+      if (allPoints.length > 1) {
+        // Simple center calculation
+        double latSum = 0, lngSum = 0;
+        for (final p in allPoints) {
+          latSum += p.latitude;
+          lngSum += p.longitude;
+        }
+        center = LatLng(latSum / allPoints.length, lngSum / allPoints.length);
+        zoom = 6;
+      }
+    }
+
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Mapa Logístico',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Pontos: origem (cinza), destino (roxo), hub de origem (azul), hub de destino (verde).',
+            style: TextStyle(fontSize: 11, color: _secondaryText),
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: SizedBox(
+              height: 350,
+              child: FlutterMap(
+                options: MapOptions(
+                  initialCenter: center,
+                  initialZoom: zoom,
+                ),
+                children: [
+                  TileLayer(
+                    urlTemplate: _isDark
+                        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+                        : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  ),
+                  MarkerLayer(markers: markers),
+                  if (polylines.isNotEmpty)
+                    PolylineLayer(polylines: polylines),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -431,7 +903,7 @@ extension _DashboardSimulatorScreen on _DashboardScreenState {
   }
 
   Widget _comparisonValue(
-          String label, double probability, bool predictedLate) =>
+      String label, double probability, bool predictedLate) =>
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

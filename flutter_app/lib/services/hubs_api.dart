@@ -277,6 +277,8 @@ class HubsApi {
       required String name,
       required String city,
       required String state,
+      double? latitude,
+      double? longitude,
       List<String>? statesServed}) async {
     final body = <String, dynamic>{
       'code': code,
@@ -284,6 +286,8 @@ class HubsApi {
       'city': city,
       'state': state,
     };
+    if (latitude != null) body['latitude'] = latitude;
+    if (longitude != null) body['longitude'] = longitude;
     if (statesServed != null && statesServed.isNotEmpty) {
       body['statesServed'] = statesServed;
     }
@@ -296,6 +300,8 @@ class HubsApi {
       required String name,
       required String city,
       required String state,
+      double? latitude,
+      double? longitude,
       List<String>? statesServed}) async {
     final body = <String, dynamic>{
       'code': code,
@@ -303,6 +309,8 @@ class HubsApi {
       'city': city,
       'state': state,
     };
+    if (latitude != null) body['latitude'] = latitude;
+    if (longitude != null) body['longitude'] = longitude;
     if (statesServed != null) {
       body['statesServed'] = statesServed;
     }

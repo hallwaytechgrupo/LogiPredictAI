@@ -1,5 +1,17 @@
 
 services:
+  postgres:
+    image: postgis/postgis:17-3.5
+    environment:
+      POSTGRES_DB: logipredict
+      POSTGRES_USER: logipredict
+      POSTGRES_PASSWORD: logipredict_secret
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
   ml:
     build:
       context: .
@@ -20,6 +32,10 @@ services:
       HOST: 0.0.0.0
       PORT: 3001
       ML_URL: http://ml:8000
+      DB_HOST: postgres
+      DB_NAME: logipredict
+      DB_USER: logipredict
+      DB_PASSWORD: logipredict_secret
       HUBS_FILE: /app/data/hubs.json
       ORDERS_FILE: /app/data/orders.json
       PREDICTIONS_FILE: /app/data/predictions.json
@@ -28,6 +44,7 @@ services:
       GEOLOCATION_FILE: /app/geolocation/olist_geolocation_dataset.csv
       OLIST_ORDERS_FILE: /app/raw/olist_orders_dataset.csv
       OLIST_CUSTOMERS_FILE: /app/raw/olist_customers_dataset.csv
+      OPENROUTE_API_KEY: ${OPENROUTE_API_KEY:-}
     volumes:
       - ./back/data/hubs:/app/data
       - ${OLIST_DATASET_HOST_FILE:-./back/data/pedidos_logipredict.csv}:/app/datasets/pedidos_logipredict.csv:ro
@@ -36,6 +53,7 @@ services:
       - ./back/data/raw/olist_customers_dataset.csv:/app/raw/olist_customers_dataset.csv:ro
     depends_on:
       - ml
+      - postgres
     ports:
       - "3001:3001"
     restart: unless-stopped
@@ -51,3 +69,7 @@ services:
     ports:
       - "8080:80"
     restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local

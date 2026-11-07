@@ -1,40 +1,32 @@
-/// Dashboard principal com abas para simulação, mapa, análise e importação.
+/// Dashboard principal com abas para simulação logística, mapa, análise
+/// e importação de pedidos.
 ///
 /// Usa `part` directives para dividir o código em:
-/// - dashboard_simulator_screen.dart: simulação de despacho individual.
+/// - dashboard_simulator_screen.dart: simulador logístico unificado (previsão + despacho).
 /// - dashboard_map_screen.dart: mapa com hubs e pedidos.
 /// - dashboard_analytics_screen.dart: análise por UF e região.
-/// - dashboard_batch_screen.dart: importação e previsão em lote.
 library;
 
-import 'dart:async';
-import 'dart:convert';
-
-import 'package:file_picker/file_picker.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_geojson2/flutter_map_geojson2.dart';
 import 'package:latlong2/latlong.dart';
 import '../services/dispatch_simulation.dart';
+import '../services/dispatch_api.dart';
 import '../services/logipredict_api.dart';
 import '../services/hubs_api.dart';
 import '../services/hub_analytics_api.dart';
 import '../services/orders_api.dart';
-import '../services/olist_dataset_api.dart';
-import '../services/batch_cancellation.dart';
-import '../services/batch_prediction_api.dart';
-import '../services/shipment_csv_service.dart';
-import '../widgets/order_hub_selector.dart';
 import '../services/orders_geography_api.dart';
 import '../services/orders_region_api.dart';
 import '../widgets/hub_risk_layer_unavailable.dart';
+import '../widgets/logistics_heat_map.dart';
 import 'hubs_management_screen.dart';
-import 'orders_management_screen.dart';
+import 'orders_screen.dart';
 
 part 'dashboard_simulator_screen.dart';
 part 'dashboard_map_screen.dart';
-part 'dashboard_batch_screen.dart';
 part 'dashboard_analytics_screen.dart';
 
 const navy = Color(0xFF0F172A);
@@ -53,6 +45,9 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
+  // ValueNotifier to trigger OrdersScreen refresh from Simulator or tab switch
+  final _ordersRefreshTrigger = ValueNotifier<int>(0);
+
   bool _isAnalyzing = false;
   List<String> _warnings = [];
   String? _modelVersion;
@@ -82,7 +77,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final HubsApi _hubsApi = HubsApi();
   final HubAnalyticsApi _hubAnalyticsApi = HubAnalyticsApi();
   final OrdersApi _ordersApi = OrdersApi();
-  final MapController _mapController = MapController();
   List<LogisticHub> _mapHubs = [];
   bool _loadingMapHubs = true;
   String? _mapHubsError;
@@ -100,26 +94,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Map<String, dynamic>? _currentScenario;
   Map<String, dynamic>? _previousScenario;
   Map<String, dynamic>? _lastAttempt;
-  bool _isBatchAnalyzing = false;
-  BatchCancellationToken _batchCancellation = BatchCancellationToken();
-  bool _batchIsOlist = false;
-  String? _batchDemoHubId;
-  int _batchSkipped = 0;
-  int _batchExistingCount = 0;
-  int _batchDemoAssignedCount = 0;
-  int _batchPreservedHubCount = 0;
-  String _batchPhase = '';
-  List<String> _batchAlerts = [];
-  int _batchCompleted = 0;
-  int _batchTotal = 0;
-  String? _batchError;
-  String? _batchFileName;
-  List<Map<String, dynamic>> _batchShipments = [];
-  List<Map<String, dynamic>> _batchResults = [];
-  final Set<String> _savingOrderHubIds = {};
-  String? _batchAssociationError;
-  Stopwatch _batchStopwatch = Stopwatch();
-  Timer? _batchTimer;
+
+  // Dispatch simulation state (unified in simulator screen)
+  Map<String, dynamic>? _dispatchResult;
+  bool _dispatchLoading = false;
+  String? _dispatchError;
+  bool _dispatchMapReady = false;
+
+  // Order selection state (select imported order for auto-fill)
+  bool _useImportedOrder = false;
+  Map<String, dynamic>? _selectedOrder;
+  String _orderSearchQuery = '';
+  List<Map<String, dynamic>> _orderSearchResults = [];
+  bool _searchingOrders = false;
+  String? _orderSearchError;
 
   // Order geography map state (legacy, kept for backward compatibility)
   final OrdersGeographyApi _ordersGeographyApi = OrdersGeographyApi();
@@ -133,13 +121,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List<RegionOrderRecord> _regionOrderData = [];
   bool _loadingRegions = false;
   String? _regionError;
-  final LayerHitNotifier<String> _regionHitNotifier = LayerHitNotifier<String>(null);
   bool _showHubLayer = true;
 
   @override
   void dispose() {
-    _batchTimer?.cancel();
-    _regionHitNotifier.dispose();
+    _ordersRefreshTrigger.dispose();
     _originController.dispose();
     _destinationController.dispose();
     _purchaseAtController.dispose();
@@ -150,6 +136,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _itemsCountController.dispose();
     _declaredValueController.dispose();
     _freightValueController.dispose();
+    _dispatchMapReady = false;
     super.dispose();
   }
 
@@ -198,31 +185,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _hubRiskError = riskError;
       _loadingHubRisk = false;
     });
-    if (hubsError == null) {
-      final points = hubs
-          .where((hub) => hub.hasValidCoordinates)
-          .map((hub) => LatLng(hub.latitude!, hub.longitude!))
-          .toList();
-      if (points.isNotEmpty) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          final distinctPoints = points
-              .map((point) => '${point.latitude},${point.longitude}')
-              .toSet();
-          if (distinctPoints.length == 1) {
-            _mapController.move(points.first, 11);
-          } else {
-            _mapController.fitCamera(
-              CameraFit.coordinates(
-                coordinates: points,
-                padding: const EdgeInsets.all(44),
-                maxZoom: 12,
-              ),
-            );
-          }
-        });
-      }
-    }
+    // Note: the LogisticsHeatMap widget manages its own MapController,
+    // so we no longer call _mapController.move/fitCamera here.
   }
 
   Future<void> _loadAnalytics() async {
@@ -429,9 +393,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  void _updateBatchState(VoidCallback update) {
-    setState(update);
-  }
 
   void _simulationInputsChanged() {
     if (_isAnalyzing) return;
@@ -449,6 +410,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _warnings = [];
       _modelVersion = null;
       _lastThreshold = null;
+      // Clear dispatch results when inputs change
+      _dispatchResult = null;
+      _dispatchError = null;
+      _dispatchLoading = false;
+      _dispatchMapReady = false;
     });
   }
 
@@ -547,15 +513,89 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _warnings = [];
       _modelVersion = null;
       _lastThreshold = null;
+      // Reset dispatch state
+      _dispatchResult = null;
+      _dispatchError = null;
+      _dispatchLoading = true;
+      _dispatchMapReady = false;
     });
 
-    var stage = 'Resolvendo CEPs';
+    // Run prediction and dispatch simulation independently
+    final orderId = _selectedOrder?['order_id']?.toString();
+    final predictionFuture = _runPrediction(
+      originCeps: originCeps,
+      destinationCep: destinationCep,
+      purchaseAt: purchaseAt,
+      dispatchedAt: dispatchedAt,
+      estimatedDeliveryAt: estimatedDeliveryAt,
+      weightKg: weightKg,
+      volumeCm3: volumeCm3,
+      itemsCount: itemsCount,
+      price: price,
+      freightValue: freightValue,
+      orderId: orderId,
+    );
+
+    // Use the first origin CEP for dispatch simulation
+    final dispatchFuture = _runDispatch(
+      originCep: originCeps[0],
+      destinationCep: destinationCep,
+    );
+
+    // Wait for both independently
+    final predictionResult = await predictionFuture;
+    final dispatchResult = await dispatchFuture;
+
+    if (!mounted) return;
+
+    // Apply prediction result
+    if (predictionResult != null) {
+      setState(() {
+        _currentScenario = predictionResult['scenario'];
+        _lastAttempt = predictionResult['lastAttempt'];
+        _riskProbability = predictionResult['probability'];
+        _predictedLate = predictionResult['predictedLate'];
+        _riskTitle = predictionResult['riskTitle'];
+        _riskDescription = predictionResult['riskDescription'];
+        _modelVersion = predictionResult['modelVersion'];
+        _lastThreshold = predictionResult['threshold'];
+        _warnings = predictionResult['warnings'];
+      });
+    }
+
+    // Apply dispatch result
+    if (dispatchResult != null) {
+      setState(() {
+        _dispatchResult = dispatchResult['result'];
+        _dispatchError = dispatchResult['error'];
+        _dispatchLoading = false;
+      });
+    } else if (_dispatchLoading) {
+      setState(() => _dispatchLoading = false);
+    }
+
+    if (mounted) setState(() => _isAnalyzing = false);
+  }
+
+  /// Runs the ML prediction and returns the result, or null on error.
+  Future<Map<String, dynamic>?> _runPrediction({
+    required List<String> originCeps,
+    required String destinationCep,
+    required DateTime purchaseAt,
+    required DateTime dispatchedAt,
+    required DateTime estimatedDeliveryAt,
+    required double weightKg,
+    required double? volumeCm3,
+    required int itemsCount,
+    required double price,
+    required double freightValue,
+    String? orderId,
+  }) async {
     try {
       final route = await LogiPredictApi.resolveRoute(
         originCeps: originCeps,
         destinationCep: destinationCep,
       );
-      stage = 'Validando os parâmetros';
       final payload = DispatchSimulation.buildPayload(
         purchaseAt: purchaseAt,
         dispatchedAt: dispatchedAt,
@@ -567,12 +607,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         freightValue: freightValue,
         route: route,
       );
-      setState(() {
-        _lastAttempt = {'payload': payload, 'route': route};
-      });
 
-      stage = 'Consultando o modelo';
-      final result = await LogiPredictApi.predict(payload);
+      final result = await LogiPredictApi.predict(payload, orderId: orderId);
       final probabilityValue = result['delay_probability'];
       final predictedLateValue = result['predicted_late'];
       final thresholdValue = result['threshold'];
@@ -605,39 +641,519 @@ class _DashboardScreenState extends State<DashboardScreen> {
         warnings.add(
             'Esta resposta veio de um modelo treinado com dados sintéticos.');
       }
+
+      return {
+        'scenario': {'payload': payload, 'route': route, 'response': result},
+        'lastAttempt': null,
+        'probability': probability,
+        'predictedLate': predictedLateValue,
+        'riskTitle': predictedLateValue
+            ? 'O modelo classificou risco de atraso'
+            : 'O modelo não classificou atraso acima do limiar',
+        'riskDescription': 'Estimativa de risco, não garantia de atraso.',
+        'modelVersion': result['model_version']?.toString(),
+        'threshold': threshold,
+        'warnings': warnings,
+      };
+    } catch (error) {
+      // Store error in state directly
+      if (mounted) {
+        setState(() {
+          _riskProbability = null;
+          _predictedLate = null;
+          _riskTitle = 'Previsão indisponível';
+          _riskDescription = error.toString();
+        });
+      }
+      return null;
+    }
+  }
+
+  /// Runs the dispatch simulation and returns the result, or null on error.
+  Future<Map<String, dynamic>?> _runDispatch({
+    required String originCep,
+    required String destinationCep,
+  }) async {
+    try {
+      final api = DispatchApi();
+      final response = await api.simulate(originCep, destinationCep);
+      return {
+        'result': response['data'],
+        'error': null,
+      };
+    } catch (error) {
+      return {
+        'result': null,
+        'error': error.toString(),
+      };
+    }
+  }
+
+  // ===== Order Selection Methods =====
+
+  /// Searches for orders by query string.
+  Future<void> _searchOrders() async {
+    if (_orderSearchQuery.trim().isEmpty) {
+      if (mounted) {
+        setState(() {
+          _orderSearchResults = [];
+          _orderSearchError = null;
+        });
+      }
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _searchingOrders = true;
+      _orderSearchError = null;
+    });
+
+    try {
+      final response = await _ordersApi.listOrders(
+        query: _orderSearchQuery.trim(),
+        source: 'operational',
+        perPage: 20,
+      );
+      final data = response['data'] as List? ?? [];
       if (!mounted) return;
       setState(() {
-        _currentScenario = {
-          'payload': payload,
-          'route': route,
-          'response': result,
-        };
-        _lastAttempt = null;
-        _riskProbability = probability;
-        _predictedLate = predictedLateValue;
-        _riskTitle = predictedLateValue
-            ? 'O modelo classificou risco de atraso'
-            : 'O modelo não classificou atraso acima do limiar';
-        _riskDescription = 'Estimativa de risco, não garantia de atraso.';
-        _modelVersion = result['model_version']?.toString();
-        _lastThreshold = threshold;
-        _warnings = warnings;
+        _orderSearchResults = data.whereType<Map<String, dynamic>>().toList();
+        _searchingOrders = false;
       });
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _riskProbability = null;
-        _predictedLate = null;
-        _riskTitle = switch (stage) {
-          'Resolvendo CEPs' => 'Não foi possível resolver a localização',
-          'Validando os parâmetros' => 'Parâmetros inválidos',
-          _ => 'Previsão indisponível',
-        };
-        _riskDescription = error.toString();
+        _orderSearchError = error.toString();
+        _searchingOrders = false;
       });
-    } finally {
-      if (mounted) setState(() => _isAnalyzing = false);
     }
+  }
+
+  /// Formats a raw CEP (01001000) to display format (01001-000).
+  String _formatCep(String raw) {
+    final digits = raw.replaceAll(RegExp(r'\D'), '');
+    if (digits.length == 8) {
+      return '${digits.substring(0, 5)}-${digits.substring(5)}';
+    }
+    return raw;
+  }
+
+  /// Formats an ISO datetime to the picker display format (YYYY-MM-DD HH:MM).
+  String _formatDateTime(String? raw) {
+    if (raw == null || raw.isEmpty) return '';
+    final parsed = DateTime.tryParse(raw.trim().replaceFirst(' ', 'T'));
+    if (parsed == null) return raw.trim();
+    return parsed.toIso8601String().substring(0, 16).replaceFirst('T', ' ');
+  }
+
+  /// Fills the form fields from a selected order.
+  void _fillFormFromOrder(Map<String, dynamic> order) {
+    // Fill origin CEP (formatted with dash)
+    final originZip = order['origin_zip_code']?.toString()?.trim();
+    if (originZip != null && originZip.isNotEmpty) {
+      _originController.text = _formatCep(originZip);
+    }
+
+    // Fill destination CEP (formatted with dash)
+    final destZip = order['destination_zip_code']?.toString()?.trim();
+    if (destZip != null && destZip.isNotEmpty) {
+      _destinationController.text = _formatCep(destZip);
+    }
+
+    // Fill dates (formatted for picker display)
+    final purchaseAt = order['purchase_at']?.toString()?.trim();
+    if (purchaseAt != null && purchaseAt.isNotEmpty) {
+      _purchaseAtController.text = _formatDateTime(purchaseAt);
+    }
+
+    final dispatchedAt = order['dispatched_at']?.toString()?.trim();
+    if (dispatchedAt != null && dispatchedAt.isNotEmpty) {
+      _dispatchedAtController.text = _formatDateTime(dispatchedAt);
+    }
+
+    final estimatedDeliveryAt = order['estimated_delivery_at']?.toString()?.trim();
+    if (estimatedDeliveryAt != null && estimatedDeliveryAt.isNotEmpty) {
+      _estimatedDeliveryAtController.text = _formatDateTime(estimatedDeliveryAt);
+    }
+
+    // Fill numeric fields
+    final weightG = order['total_weight_g'];
+    if (weightG != null) {
+      _weightController.text = (weightG is num ? (weightG / 1000).toString() : '');
+    }
+
+    final volumeCm3 = order['total_volume_cm3'];
+    if (volumeCm3 != null) {
+      _volumeController.text = volumeCm3.toString();
+    }
+
+    final itemsCount = order['items_count'];
+    if (itemsCount != null) {
+      _itemsCountController.text = itemsCount.toString();
+    }
+
+    final price = order['price'];
+    if (price != null) {
+      _declaredValueController.text = price.toString();
+    }
+
+    final freightValue = order['freight_value'];
+    if (freightValue != null) {
+      _freightValueController.text = freightValue.toString();
+    }
+
+    // Clear previous simulation results
+    setState(() {
+      _selectedOrder = order;
+      _currentScenario = null;
+      _lastAttempt = null;
+      _riskProbability = null;
+      _predictedLate = null;
+      _riskTitle = 'Pedido selecionado';
+      _riskDescription = 'Dados carregados do pedido ${order['order_id']}. Execute a simulação para obter resultados.';
+      _warnings = [];
+      _modelVersion = null;
+      _lastThreshold = null;
+      _dispatchResult = null;
+      _dispatchError = null;
+      _dispatchLoading = false;
+      _dispatchMapReady = false;
+      _orderSearchResults = [];
+      _orderSearchQuery = '';
+    });
+  }
+
+  /// Clears the selected order and returns to manual mode.
+  void _clearSelectedOrder() {
+    setState(() {
+      _useImportedOrder = false;
+      _selectedOrder = null;
+      _orderSearchQuery = '';
+      _orderSearchResults = [];
+      _searchingOrders = false;
+      _orderSearchError = null;
+    });
+  }
+
+  /// Toggles between manual and imported order mode.
+  void _toggleOrderSelectionMode(bool value) {
+    if (value) {
+      setState(() {
+        _useImportedOrder = true;
+        _selectedOrder = null;
+        _orderSearchResults = [];
+      });
+    } else {
+      _clearSelectedOrder();
+    }
+  }
+
+  /// Attempts to associate an order without a hub to the nearest hub.
+  Future<void> _associateOrderHub(Map<String, dynamic> order) async {
+    final destZip = order['destination_zip_code']?.toString()?.trim();
+    if (destZip == null || destZip.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Pedido sem CEP de destino para associação.')),
+        );
+      }
+      return;
+    }
+
+    // Show loading indicator
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Center(
+          child: Card(child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Buscando hub mais próximo...'),
+              ],
+            ),
+          )),
+        ),
+      );
+    }
+
+    try {
+      final api = DispatchApi();
+      final response = await api.nearestHub(cep: destZip);
+
+      // API returns: { data: { cep, location, hub: {id, code, name, ...}, distance_km } }
+      final data = response['data'] as Map<String, dynamic>?;
+      final hub = data?['hub'] as Map<String, dynamic>?;
+
+      if (hub != null && hub['id'] != null) {
+        await _ordersApi.setHub(order['order_id'].toString(), hub['id'].toString());
+        if (mounted) {
+          Navigator.of(context).pop(); // Close loading dialog
+          setState(() {
+            // Update the selected order with full hub info
+            _selectedOrder = {
+              ...order,
+              'hub_id': hub['id'],
+              'hub': hub,
+            };
+          });
+          final hubName = hub['name']?.toString() ?? hub['code']?.toString() ?? 'Hub';
+          final distance = data?['distance_km']?.toString() ?? '';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('$hubName associado ao pedido (${distance} km).'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          // Refresh OrdersScreen so the updated hub appears immediately
+          _ordersRefreshTrigger.value++;
+        }
+      } else {
+        if (mounted) {
+          Navigator.of(context).pop(); // Close loading dialog
+          // Provide specific error based on response
+          String errorMessage = 'Nenhum hub encontrado para o CEP de destino.';
+          final errorType = response['error']?.toString();
+          if (errorType == 'CEP_NOT_FOUND') {
+            errorMessage = 'CEP ${destZip} não encontrado na base geográfica.';
+          } else if (errorType == 'NO_HUBS_AVAILABLE') {
+            errorMessage = 'Nenhum hub ativo e aprovado disponível no sistema.';
+          } else if (errorType == 'NO_ELIGIBLE_HUBS') {
+            errorMessage = 'Nenhum hub com coordenadas válidas encontrado para esta região.';
+          }
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(errorMessage)),
+          );
+        }
+      }
+    } catch (error) {
+      if (mounted) {
+        if (Navigator.canPop(context)) {
+          Navigator.of(context).pop(); // Close loading dialog
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao associar hub: ${error.toString()}'),
+            backgroundColor: Colors.red.shade700,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Order selection widget: toggle, search, and results.
+  Widget _buildOrderSelection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.receipt_long, size: 18, color: blue),
+            const SizedBox(width: 8),
+            const Text(
+              'Utilizar pedido importado',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+            ),
+            const Spacer(),
+            Switch(
+              value: _useImportedOrder,
+              onChanged: _isAnalyzing ? null : _toggleOrderSelectionMode,
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Selecione um pedido já importado para carregar automaticamente os dados do formulário.',
+          style: TextStyle(fontSize: 11, color: _secondaryText),
+        ),
+        if (_useImportedOrder) ...[
+          const SizedBox(height: 12),
+          const Divider(height: 16),
+          if (_selectedOrder != null) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.green.shade200),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.check_circle, color: Colors.green, size: 18),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Pedido: ${_selectedOrder!['order_id']}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _isAnalyzing ? null : _clearSelectedOrder,
+                        child: const Text('Limpar', style: TextStyle(fontSize: 12)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'CEP origem: ${_formatCep(_selectedOrder!['origin_zip_code']?.toString() ?? 'N/A')} | '
+                    'CEP destino: ${_formatCep(_selectedOrder!['destination_zip_code']?.toString() ?? 'N/A')}',
+                    style: TextStyle(fontSize: 12, color: _secondaryText),
+                  ),
+                  if ((_selectedOrder!['hub_id'] ?? '').toString().isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.warning_amber, color: Colors.orange, size: 16),
+                          const SizedBox(width: 6),
+                          const Text(
+                            'Sem hub associado. ',
+                            style: TextStyle(color: Colors.orange, fontSize: 12),
+                          ),
+                          TextButton(
+                            onPressed: () => _associateOrderHub(_selectedOrder!),
+                            child: const Text('Associar agora', style: TextStyle(fontSize: 12)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if ((_selectedOrder!['hub_id'] ?? '').toString().isNotEmpty) ...() {
+                    final hub = _selectedOrder!['hub'] as Map<String, dynamic>?;
+                    final hubCode = hub?['code']?.toString() ?? _selectedOrder!['hub_id'].toString();
+                    return [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          'Hub: $hubCode',
+                          style: TextStyle(fontSize: 12, color: _secondaryText),
+                        ),
+                      ),
+                    ];
+                  }(),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+          TextFormField(
+            initialValue: _orderSearchQuery,
+            decoration: InputDecoration(
+              labelText: 'Pesquisar por order_id',
+              prefixIcon: const Icon(Icons.search, size: 20),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+              isDense: true,
+            ),
+            onChanged: (value) {
+              setState(() => _orderSearchQuery = value);
+              _searchOrders();
+            },
+            enabled: !_isAnalyzing,
+          ),
+          if (_searchingOrders)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            ),
+          if (_orderSearchError != null && !_searchingOrders)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                _orderSearchError!,
+                style: const TextStyle(color: Colors.red, fontSize: 12),
+              ),
+            ),
+          if (_orderSearchResults.isNotEmpty && !_searchingOrders) ...[
+            const SizedBox(height: 8),
+            Text(
+              '${_orderSearchResults.length} pedido(s) encontrado(s)',
+              style: TextStyle(fontSize: 11, color: _secondaryText),
+            ),
+            const SizedBox(height: 4),
+            ..._orderSearchResults.take(10).map((order) {
+              final orderId = order['order_id']?.toString() ?? '';
+              final originZip = order['origin_zip_code']?.toString() ?? '';
+              final destZip = order['destination_zip_code']?.toString() ?? '';
+              final hubObj = order['hub'] as Map<String, dynamic>?;
+              final hubCode = hubObj?['code']?.toString() ?? '';
+              final hubId = order['hub_id']?.toString() ?? '';
+              final hasHub = hubId.isNotEmpty;
+              final hubLabel = hubCode.isNotEmpty ? hubCode : hubId;
+              return Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: _isAnalyzing ? null : () => _fillFormFromOrder(order),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: _border),
+                      borderRadius: BorderRadius.circular(8),
+                      color: _surfaceAlt,
+                    ),
+                    margin: const EdgeInsets.only(bottom: 4),
+                    child: Row(
+                      children: [
+                        Icon(Icons.receipt_long, size: 18,
+                            color: hasHub ? Colors.green : Colors.orange),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(orderId,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w500, fontSize: 13)),
+                              Text(
+                                'Origem: ${_formatCep(originZip)} → Destino: ${_formatCep(destZip)}'
+                                '${hasHub ? ' | Hub: $hubLabel' : ' | Sem hub'}',
+                                style: TextStyle(fontSize: 11, color: _secondaryText),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.chevron_right, size: 18, color: muted),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }),
+            if (_orderSearchResults.length > 10)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  'Mostrando 10 de ${_orderSearchResults.length}. Refine a pesquisa.',
+                  style: TextStyle(fontSize: 11, color: _secondaryText),
+                ),
+              ),
+          ],
+          if (_orderSearchResults.isEmpty &&
+              !_searchingOrders &&
+              _orderSearchQuery.trim().isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text(
+                'Nenhum pedido encontrado para "$_orderSearchQuery".',
+                style: TextStyle(fontSize: 12, color: _secondaryText),
+                textAlign: TextAlign.center,
+              ),
+            ),
+        ],
+      ],
+    );
   }
 
   Color get _riskColor {
@@ -650,10 +1166,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final pages = [
       _buildSimulator(),
       _buildMapPage(),
-      _buildBatchPage(),
+      OrdersScreen(refreshTrigger: _ordersRefreshTrigger),
       _buildAnalyticsPage(),
       const HubsManagementScreen(),
-      const OrdersManagementScreen(),
     ];
     return Scaffold(
       appBar: AppBar(
@@ -732,20 +1247,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildNavigation() {
     const labels = [
-      'Simulador Prescritivo',
+      'Simulador Logístico',
       'Mapa de Calor Logístico',
-      'Simulação em Lote',
+      'Pedidos',
       'Analytics & KPIs',
       'Gestão de Hubs',
-      'Pedidos',
     ];
     const icons = [
       Icons.calculate_outlined,
       Icons.map_outlined,
-      Icons.table_view_outlined,
+      Icons.receipt_long_outlined,
       Icons.show_chart,
       Icons.warehouse_outlined,
-      Icons.receipt_long_outlined,
     ];
     return Container(
       decoration: BoxDecoration(
@@ -760,12 +1273,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
             return InkWell(
               onTap: () {
                 final wasOnMap = _tab == 1;
+                final wasOnOrders = _tab == 2;
                 setState(() => _tab = i);
                 if (i == 1 &&
                     !wasOnMap &&
                     !_loadingMapHubs &&
                     !_loadingHubRisk) {
                   _loadMapHubs();
+                }
+                // Refresh OrdersScreen when navigating to it
+                if (i == 2 && !wasOnOrders) {
+                  _ordersRefreshTrigger.value++;
                 }
               },
               child: Container(

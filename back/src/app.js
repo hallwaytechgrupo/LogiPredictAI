@@ -22,6 +22,19 @@ import path from 'node:path';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 
+// Repositórios PostgreSQL (fallback para JSON)
+import {
+  create as createPrediction,
+  findByOrderId as findPredictionsByOrderId,
+  list as listPredictions,
+  checkDb as checkPredictionsDb,
+} from './db/repositories/predictions.js';
+import {
+  findById as findOrderById,
+  list as listOrders,
+  checkDb as checkOrdersDb,
+} from './db/repositories/orders.js';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_HUBS_FILE = path.resolve(process.cwd(), 'data', 'hubs.json');
 
@@ -43,7 +56,7 @@ const DEFAULT_HUBS_FILE = path.resolve(process.cwd(), 'data', 'hubs.json');
  * @param {number} opts.batchSize - Tamanho do lote para importação Olist.
  * @returns {import('express').Express} Aplicação Express configurada.
  */
-export function createApp({
+export async function createApp({
   mlUrl = 'http://127.0.0.1:8000',
   timeoutMs = 10000,
   hubsFile = process.env.HUBS_FILE || DEFAULT_HUBS_FILE,
@@ -329,15 +342,38 @@ export function createApp({
   }
 
   async function readOrders() {
+    // Tenta PostgreSQL primeiro; se indisponível, fallback para JSON.
+    // Mescla resultados do DB e do JSON para suportar testes que usam JSON.
+    let dbOrders = [];
+    const dbOk = await checkOrdersDb();
+    if (dbOk) {
+      try {
+        const result = await listOrders({ page: 1, perPage: 50000 });
+        if (result && result.data) dbOrders = result.data;
+      } catch (e) {
+        console.warn('Falha ao ler pedidos do PostgreSQL, usando JSON:', e.message);
+      }
+    }
+    let jsonOrders = [];
     try {
       const content = await readFile(ordersFile, 'utf8');
       const parsed = JSON.parse(content);
-      if (!Array.isArray(parsed)) throw new Error('Formato de orders.json inválido.');
-      return parsed;
+      if (Array.isArray(parsed)) jsonOrders = parsed;
     } catch (error) {
-      if (error.code === 'ENOENT') return [];
-      throw error;
+      if (error.code !== 'ENOENT') throw error;
     }
+    // Mescla DB + JSON, deduplicando por order_id (DB tem prioridade)
+    if (jsonOrders.length === 0) return dbOrders;
+    if (dbOrders.length === 0) return jsonOrders;
+    const seen = new Set(dbOrders.map((o) => o.order_id));
+    const merged = [...dbOrders];
+    for (const jo of jsonOrders) {
+      if (!seen.has(jo.order_id)) {
+        merged.push(jo);
+        seen.add(jo.order_id);
+      }
+    }
+    return merged;
   }
 
   async function writeOrders(orders) {
@@ -349,6 +385,16 @@ export function createApp({
   }
 
   async function readPredictions() {
+    // Tenta PostgreSQL primeiro; se indisponível, fallback para JSON/JSONL.
+    const dbOk = await checkPredictionsDb();
+    if (dbOk) {
+      try {
+        const result = await listPredictions({ page: 1, perPage: 50000 });
+        if (result && result.data) return result.data;
+      } catch (e) {
+        console.warn('Falha ao ler previsões do PostgreSQL, usando JSON:', e.message);
+      }
+    }
     let history = [];
     try {
       const content = await readFile(predictionsFile, 'utf8');
@@ -379,6 +425,16 @@ export function createApp({
   }
 
   async function appendPrediction(prediction) {
+    // Tenta PostgreSQL primeiro; se indisponível, fallback para JSONL.
+    const dbOk = await checkPredictionsDb();
+    if (dbOk) {
+      try {
+        await createPrediction(prediction);
+        return;
+      } catch (e) {
+        console.warn('Falha ao salvar previsão no PostgreSQL, usando JSONL:', e.message);
+      }
+    }
     return serializePredictionMutation(async () => {
       // Validate the existing history once; subsequent predictions append in O(1).
       if (!predictionJournalValidated) {
@@ -944,15 +1000,28 @@ export function createApp({
           // Persist predictions for this batch
           if (predictionsToPersist.length > 0) {
             try {
-              await serializePredictionMutation(async () => {
-                if (!predictionJournalValidated) {
-                  await readPredictions();
-                  predictionJournalValidated = true;
+              const dbOk = await checkPredictionsDb();
+              if (dbOk) {
+                // Salvar no PostgreSQL
+                for (const pred of predictionsToPersist) {
+                  try {
+                    await createPrediction(pred);
+                  } catch (e) {
+                    console.warn('Falha ao salvar previsão em lote no PostgreSQL:', e.message);
+                  }
                 }
-                await mkdir(path.dirname(predictionJournalFile), { recursive: true });
-                const lines = predictionsToPersist.map((p) => JSON.stringify(p)).join('\n') + '\n';
-                await appendFile(predictionJournalFile, lines, { encoding: 'utf8', mode: 0o600 });
-              });
+              } else {
+                // Fallback: JSONL
+                await serializePredictionMutation(async () => {
+                  if (!predictionJournalValidated) {
+                    await readPredictions();
+                    predictionJournalValidated = true;
+                  }
+                  await mkdir(path.dirname(predictionJournalFile), { recursive: true });
+                  const lines = predictionsToPersist.map((p) => JSON.stringify(p)).join('\n') + '\n';
+                  await appendFile(predictionJournalFile, lines, { encoding: 'utf8', mode: 0o600 });
+                });
+              }
             } catch (error) {
               console.error('Falha ao gravar previsões em lote:', error.message);
             }
@@ -998,330 +1067,39 @@ export function createApp({
 
   /* ---- Geolocalização e cálculo de distância ---- */
 
-  // Calcula a distância Haversine entre o CEP do vendedor e o CEP do cliente.
-  // Usa o índice de geolocalização carregado do CSV da Olist.
-  app.post('/api/v1/geolocation/route', async (req, res) => {
-    if (!req.is('application/json')) {
-      return res.status(415).json({ error: 'UNSUPPORTED_MEDIA_TYPE', message: 'Envie application/json.' });
-    }
-    const originInput = req.body?.origin_ceps;
-    const destinationCep = normalizeCep(req.body?.destination_cep);
-    if (!Array.isArray(originInput) || originInput.length < 1 || originInput.length > 100 ||
-        !destinationCep || originInput.some((cep) => !normalizeCep(cep))) {
-      return res.status(422).json({
-        error: 'INVALID_CEP',
-        message: 'Informe um CEP de destino e de 1 a 100 CEPs de origem no formato 00000-000.',
-      });
-    }
-    try {
-      const index = await getGeolocationIndex();
-      const resolve = (cep) => {
-        const normalized = normalizeCep(cep);
-        const zipPrefix = normalized.slice(0, 5);
-        const location = index.get(zipPrefix);
-        return location ? { cep: normalized, zip_prefix: zipPrefix, ...location } : null;
-      };
-      const origins = originInput.map(resolve);
-      const missingOrigin = origins.findIndex((location) => !location);
-      if (missingOrigin >= 0) {
-        return res.status(404).json({
-          error: 'CEP_NOT_FOUND',
-          message: 'O CEP de origem ' + normalizeCep(originInput[missingOrigin]) + ' não consta na base geográfica usada pelo modelo.',
-        });
-      }
-      const destination = resolve(destinationCep);
-      if (!destination) {
-        return res.status(404).json({
-          error: 'CEP_NOT_FOUND',
-          message: 'O CEP de destino ' + destinationCep + ' não consta na base geográfica usada pelo modelo.',
-        });
-      }
-      if (origins.some((location) => !location.state) || !destination.state) {
-        return res.status(422).json({
-          error: 'LOCATION_INCOMPLETE',
-          message: 'A base geográfica não contém UF para um dos CEPs informados.',
-        });
-      }
-      const routeDistances = origins.map((origin) => haversineKm(origin, destination));
-      return res.json({
-        data: {
-          origins: origins.map((origin, index) => ({
-            ...origin,
-            distance_km: routeDistances[index],
-          })),
-          destination,
-          seller_state: origins[0].state,
-          customer_state: destination.state,
-          distance_km: Math.max(...routeDistances),
-          distance_method: 'Maior distância em linha reta entre os vendedores e o destino (Haversine, km).',
-          geolocation_source: 'Base Olist geolocation; coordenadas medianas pelo prefixo CEP de 5 dígitos.',
-        },
-      });
-    } catch (error) {
-      if (error.code === 'ENOENT') {
-        return res.status(503).json({
-          error: 'GEOLOCATION_SOURCE_UNAVAILABLE',
-          message: 'A base geográfica Olist necessária para resolver os CEPs não está disponível.',
-        });
-      }
-      console.error('Falha ao carregar base geográfica:', error.message);
-      return res.status(500).json({
-        error: 'GEOLOCATION_ERROR',
-        message: 'Não foi possível resolver a localização dos CEPs.',
-      });
-    }
-  });
+  // Inicializa o módulo de geolocalização compartilhado
+  const { initGeolocation } = await import('./geolocation.js');
+  initGeolocation(geolocationFile);
+
+  // Executar migrations do PostgreSQL automaticamente na inicialização
+  try {
+    const { getKnex } = await import('./db/knex.js');
+    const knex = getKnex();
+    await knex.migrate.latest();
+    console.log('[DB] Migrations executadas com sucesso.');
+  } catch (e) {
+    console.warn('[DB] Falha ao executar migrations (usando fallback JSON):', e.message);
+  }
+
+  // Expor caminhos de arquivos para rotas modulares (usado pelo fallback JSON)
+  app.locals.ordersFile = ordersFile;
+  app.locals.hubsFile = hubsFile;
+  app.locals.predictionsFile = predictionsFile;
+  app.locals.geolocationFile = geolocationFile;
+
+  // Rotas modulares de geolocalização (substitui endpoint inline)
+  const geolocationRouter = (await import('./routes/geolocation.js')).default;
+  app.use('/api/v1/geolocation', geolocationRouter);
 
   /* ---- Gerenciamento de pedidos (importação e registro) ---- */
 
-  // Registra um pedido no banco local (orders.json) com associação opcional a um hub.
-  // Suporta importação em lote com deduplicação e alocação automática de hub padrão.
-  app.post('/api/v1/orders/import', async (req, res) => {
-    if (!req.is('application/json')) {
-      return res.status(415).json({ error: 'UNSUPPORTED_MEDIA_TYPE', message: 'Envie application/json.' });
-    }
-    const input = req.body?.orders;
-    if (!Array.isArray(input) || input.length < 1 || input.length > 2000) {
-      return res.status(422).json({ error: 'INVALID_ORDERS', message: 'Informe de 1 a 2000 pedidos.' });
-    }
-    const prepared = [];
-    const seen = new Set();
-    let hubsSnapshot;
-    let defaultHubId;
-    if (Object.hasOwn(req.body ?? {}, 'default_hub_id') && req.body.default_hub_id != null) {
-      try {
-        hubsSnapshot = await readHubs();
-      } catch (error) {
-        return handleStorageError(res, error);
-      }
-      const reference = await validateHubReference(req.body.default_hub_id, hubsSnapshot);
-      if (reference.error) {
-        return res.status(reference.error.status).json({
-          error: reference.error.code,
-          message: reference.error.message,
-        });
-      }
-      defaultHubId = reference.hub.id;
-    }
-    const rawSource = req.body?.source;
-    const validSource = typeof rawSource === 'string' && rawSource.trim().length > 0
-      ? rawSource.trim().toLowerCase()
-      : null;
-    for (let index = 0; index < input.length; index++) {
-      const entry = input[index];
-      if (!entry || typeof entry !== 'object' || Array.isArray(entry) ||
-          Object.keys(entry).some((key) => !['order_id', 'hub_id'].includes(key))) {
-        return res.status(422).json({ error: 'INVALID_ORDER', message: `Dados inválidos no pedido ${index + 1}.` });
-      }
-      const orderId = normalizeOrderId(entry?.order_id);
-      if (!orderId) {
-        return res.status(422).json({ error: 'INVALID_ORDER_ID', message: `order_id inválido no pedido ${index + 1}.` });
-      }
-      if (seen.has(orderId)) {
-        return res.status(422).json({ error: 'DUPLICATE_ORDER_ID', message: `order_id duplicado: ${orderId}.` });
-      }
-      seen.add(orderId);
-      let hubId;
-      if (entry.hub_id !== undefined && entry.hub_id !== null) {
-        try {
-          hubsSnapshot ??= await readHubs();
-        } catch (error) {
-          return handleStorageError(res, error);
-        }
-        const reference = await validateHubReference(entry.hub_id, hubsSnapshot);
-        if (reference.error) return res.status(reference.error.status).json({
-          error: reference.error.code,
-          message: `${reference.error.message} Pedido: ${orderId}.`,
-        });
-        hubId = reference.hub.id;
-      }
-      prepared.push({ orderId, hubId: hubId ?? (entry.hub_id === null ? null : undefined), source: validSource });
-    }
-    try {
-      const orders = await serializeOrderMutation(async () => {
-        const current = await readOrders();
-        const currentById = new Map(current.map((order, index) => [order.order_id, index]));
-        const now = new Date().toISOString();
-        const createdIds = new Set();
-        const demoAssignedIds = new Set();
-        const preservedHubIds = new Set();
-        for (const { orderId, hubId, source } of prepared) {
-          const currentIndex = currentById.get(orderId);
-          if (currentIndex === undefined) {
-            const assignedHubId = hubId === undefined ? defaultHubId ?? null : hubId;
-            const created = { order_id: orderId, hub_id: assignedHubId, createdAt: now, updatedAt: now };
-            if (source) created.source = source;
-            current.push(created);
-            currentById.set(orderId, current.length - 1);
-            createdIds.add(orderId);
-            if (hubId === undefined && defaultHubId != null) demoAssignedIds.add(orderId);
-          } else {
-            const existing = current[currentIndex];
-            if (hubId !== undefined && existing.hub_id !== hubId) {
-              const updated = { ...existing, hub_id: hubId, updatedAt: now };
-              if (source && !existing.source) updated.source = source;
-              current[currentIndex] = updated;
-            } else if (hubId === undefined && defaultHubId != null) {
-              if (existing.hub_id == null) {
-                const updated = { ...existing, hub_id: defaultHubId, updatedAt: now };
-                if (source && !existing.source) updated.source = source;
-                current[currentIndex] = updated;
-                demoAssignedIds.add(orderId);
-              } else if (existing.hub_id !== defaultHubId) {
-                preservedHubIds.add(orderId);
-              }
-            }
-          }
-        }
-        await writeOrders(current);
-        return { current, currentById, createdIds, demoAssignedIds, preservedHubIds };
-      });
-      hubsSnapshot ??= await readHubs();
-      const data = await Promise.all(prepared.map(async ({ orderId }) => {
-        const order = orders.current[orders.currentById.get(orderId)];
-        const hub = order.hub_id == null ? null : hubsSnapshot.find((item) => item.id === order.hub_id);
-        return {
-          order_id: order.order_id,
-          hub_id: order.hub_id ?? null,
-          hub: hub ? { id: hub.id, code: hub.code, name: hub.name, city: hub.city, state: hub.state } : null,
-          imported: orders.createdIds.has(orderId),
-          demo_hub_assigned: orders.demoAssignedIds.has(orderId),
-          hub_preserved: orders.preservedHubIds.has(orderId),
-          source: order.source ?? null,
-          createdAt: order.createdAt,
-          updatedAt: order.updatedAt,
-        };
-      }));
-      return res.status(200).json({ data, total: data.length });
-    } catch (error) {
-      console.error('Falha ao armazenar pedidos:', error.message);
-      return res.status(500).json({ error: 'ORDER_STORAGE_ERROR', message: 'Não foi possível armazenar os pedidos importados.' });
-    }
-  });
+  // Rotas modulares de pedidos (substitui endpoints inline)
+  const ordersRouter = (await import('./routes/orders.js')).default;
+  app.use('/api/v1/orders', ordersRouter);
 
-  app.get('/api/v1/orders/:orderId', async (req, res) => {
-    const orderId = normalizeOrderId(req.params.orderId);
-    if (!orderId) return res.status(422).json({ error: 'INVALID_ORDER_ID', message: 'order_id inválido.' });
-    try {
-      const order = (await readOrders()).find((item) => item.order_id === orderId);
-      if (!order) return res.status(404).json({ error: 'ORDER_NOT_FOUND', message: 'O pedido não foi importado.' });
-      const hub = order.hub_id == null ? null : (await readHubs()).find((item) => item.id === order.hub_id);
-      return res.json({ data: {
-        order_id: order.order_id,
-        hub_id: order.hub_id ?? null,
-        hub: hub ? { id: hub.id, code: hub.code, name: hub.name, city: hub.city, state: hub.state } : null,
-        createdAt: order.createdAt,
-        updatedAt: order.updatedAt,
-      } });
-    } catch (error) {
-      console.error('Falha ao ler pedidos:', error.message);
-      return res.status(500).json({ error: 'ORDER_STORAGE_ERROR', message: 'Não foi possível consultar o pedido.' });
-    }
-  });
-
-  app.patch('/api/v1/orders/:orderId/hub', async (req, res) => {
-    if (!req.is('application/json')) {
-      return res.status(415).json({ error: 'UNSUPPORTED_MEDIA_TYPE', message: 'Envie application/json.' });
-    }
-    const orderId = normalizeOrderId(req.params.orderId);
-    if (!orderId) return res.status(422).json({ error: 'INVALID_ORDER_ID', message: 'order_id inválido.' });
-    if (!Object.hasOwn(req.body ?? {}, 'hub_id')) {
-      return res.status(422).json({ error: 'HUB_ID_REQUIRED', message: 'Envie hub_id com um identificador ou null para remover a associação.' });
-    }
-    if (Object.keys(req.body).some((key) => key !== 'hub_id')) {
-      return res.status(422).json({ error: 'INVALID_ORDER_UPDATE', message: 'Envie somente o campo hub_id.' });
-    }
-    try {
-      const reference = await validateHubReference(req.body.hub_id);
-      if (reference.error) return res.status(reference.error.status).json({ error: reference.error.code, message: reference.error.message });
-      const order = await serializeOrderMutation(async () => {
-        const orders = await readOrders();
-        const index = orders.findIndex((item) => item.order_id === orderId);
-        if (index < 0) return null;
-        orders[index] = { ...orders[index], hub_id: reference.hub?.id ?? null, updatedAt: new Date().toISOString() };
-        await writeOrders(orders);
-        return orders[index];
-      });
-      if (!order) return res.status(404).json({ error: 'ORDER_NOT_FOUND', message: 'Importe o pedido antes de associar um hub.' });
-      const hub = reference.hub;
-      return res.json({ data: {
-        order_id: orderId,
-        hub_id: order.hub_id,
-        hub: hub ? { id: hub.id, code: hub.code, name: hub.name, city: hub.city, state: hub.state } : null,
-        createdAt: order.createdAt,
-        updatedAt: order.updatedAt,
-      } });
-    } catch (error) {
-      console.error('Falha ao atualizar associação do pedido:', error.message);
-      return res.status(500).json({ error: 'ORDER_STORAGE_ERROR', message: 'Não foi possível atualizar a associação do pedido.' });
-    }
-  });
-
-  /* ---- Listagem de pedidos importados ---- */
-
-  // Lista todos os pedidos importados com paginação e filtros opcionais.
-  // Deve ser definido antes de /:orderId para que Express não confunda "list" com um ID.
-  app.get('/api/v1/orders', async (req, res) => {
-    const parsePositiveInt = (value, defaultValue, max) => {
-      if (value === undefined) return { value: defaultValue };
-      const parsed = parseInt(value, 10);
-      if (!Number.isFinite(parsed) || parsed < 1 || parsed > max) return { error: true };
-      return { value: parsed };
-    };
-    const pageResult = parsePositiveInt(req.query.page, 1, 9999);
-    const perPageResult = parsePositiveInt(req.query.per_page, 50, 500);
-    if (pageResult.error || perPageResult.error) {
-      return res.status(422).json({ error: 'INVALID_PAGE', message: 'Parâmetros de paginação inválidos. Use page e per_page como inteiros positivos.' });
-    }
-    const page = pageResult.value;
-    const perPage = perPageResult.value;
-    const hubId = req.query.hub_id;
-    if (hubId !== undefined && (typeof hubId !== 'string' || !hubId.trim())) {
-      return res.status(422).json({ error: 'INVALID_HUB_ID', message: 'hub_id inválido.' });
-    }
-    const q = req.query.q;
-    if (q !== undefined && typeof q !== 'string') {
-      return res.status(422).json({ error: 'INVALID_QUERY', message: 'Parâmetro q deve ser uma string.' });
-    }
-    try {
-      let orders = await readOrders();
-      if (hubId) orders = orders.filter((o) => o.hub_id === hubId.trim());
-      if (q) {
-        const search = q.trim().toLowerCase();
-        orders = orders.filter((o) => String(o.order_id).toLowerCase().includes(search));
-      }
-      const total = orders.length;
-      // Sort by createdAt descending (most recent first)
-      orders.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
-      const start = (page - 1) * perPage;
-      const end = start + perPage;
-      const data = orders.slice(start, end);
-      // Enrich with hub information
-      const hubs = await readHubs();
-      const hubsById = new Map(hubs.map((h) => [h.id, h]));
-      const enriched = data.map((order) => {
-        const hub = order.hub_id == null ? null : hubsById.get(order.hub_id) ?? null;
-        return {
-          order_id: order.order_id,
-          hub_id: order.hub_id ?? null,
-          hub: hub ? { id: hub.id, code: hub.code, name: hub.name, city: hub.city, state: hub.state } : null,
-          source: order.source ?? null,
-          createdAt: order.createdAt,
-          updatedAt: order.updatedAt,
-        };
-      });
-      return res.json({
-        data: enriched,
-        total,
-        page,
-        per_page: perPage,
-        total_pages: Math.ceil(total / perPage) || 1,
-      });
-    } catch (error) {
-      console.error('Falha ao listar pedidos:', error.message);
-      return res.status(500).json({ error: 'ORDER_STORAGE_ERROR', message: 'Não foi possível consultar os pedidos.' });
-    }
-  });
+  // Rotas modulares de despacho
+  const dispatchRouter = (await import('./routes/dispatch.js')).default;
+  app.use('/api/v1/dispatch', dispatchRouter);
 
   /* ---- Gerenciamento de hubs logísticos (CRUD) ---- */
 

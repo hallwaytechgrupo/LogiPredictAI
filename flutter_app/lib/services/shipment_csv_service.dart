@@ -17,11 +17,15 @@ class ShipmentCsvService {
     final headers = records.first.map((h) => h.trim().toLowerCase()).toList();
     const required = <String>[
       'order_id',
-      'seller_state',
-      'customer_state',
+      'origin_zip_code',
+      'destination_zip_code',
+      'purchase_at',
       'dispatched_at',
       'estimated_delivery_at',
-      'total_weight_g',
+      'seller_state',
+      'customer_state',
+      'items_count',
+      'sellers_count',
       'price',
       'freight_value',
     ];
@@ -65,34 +69,64 @@ class ShipmentCsvService {
       if (row.every((value) => value.trim().isEmpty)) continue;
       final line = i + 1;
       final id = field(row, 'order_id');
+      final originZip = field(row, 'origin_zip_code');
+      final destZip = field(row, 'destination_zip_code');
       final sellerState = field(row, 'seller_state').toUpperCase();
       final customerState = field(row, 'customer_state').toUpperCase();
-      final dispatched =
-          date(field(row, 'dispatched_at'), 'dispatched_at', line);
-      final estimated = date(
-          field(row, 'estimated_delivery_at'), 'estimated_delivery_at', line);
       final purchaseRaw = field(row, 'purchase_at');
-      final purchase = purchaseRaw.isEmpty
-          ? dispatched
-          : date(purchaseRaw, 'purchase_at', line);
-      final weight =
-          number(field(row, 'total_weight_g'), 'total_weight_g', line);
-      final price = number(field(row, 'price'), 'price', line);
-      final freight =
-          number(field(row, 'freight_value'), 'freight_value', line);
-      if (id.isEmpty ||
-          !RegExp(r'^[A-Z]{2}$').hasMatch(sellerState) ||
+      final dispatchedRaw = field(row, 'dispatched_at');
+      final estimatedRaw = field(row, 'estimated_delivery_at');
+      if (id.isEmpty) {
+        invalidCount++;
+        if (invalidExamples.length < 5) {
+          invalidExamples.add('Linha $line: order_id vazio.');
+        }
+        continue;
+      }
+      if (!RegExp(r'^[A-Z]{2}$').hasMatch(sellerState) ||
           !RegExp(r'^[A-Z]{2}$').hasMatch(customerState)) {
-        throw FormatException(
-            'Linha $line: order_id e UFs válidas (ex.: SP, BA) são obrigatórios.');
+        invalidCount++;
+        if (invalidExamples.length < 5) {
+          invalidExamples.add('Linha $line ($id): UFs inválidas.');
+        }
+        continue;
+      }
+      DateTime purchase, dispatched, estimated;
+      try {
+        purchase = date(purchaseRaw, 'purchase_at', line);
+        dispatched = date(dispatchedRaw, 'dispatched_at', line);
+        estimated = date(estimatedRaw, 'estimated_delivery_at', line);
+      } on FormatException {
+        invalidCount++;
+        if (invalidExamples.length < 5) {
+          invalidExamples.add('Linha $line ($id): data inválida.');
+        }
+        continue;
+      }
+      double price, freight;
+      int itemsCount, sellersCount;
+      try {
+        price = number(field(row, 'price'), 'price', line);
+        freight = number(field(row, 'freight_value'), 'freight_value', line);
+        itemsCount = number(field(row, 'items_count'), 'items_count', line)
+            .round();
+        sellersCount =
+            number(field(row, 'sellers_count'), 'sellers_count', line).round();
+      } on FormatException {
+        invalidCount++;
+        if (invalidExamples.length < 5) {
+          invalidExamples.add('Linha $line ($id): valor numérico inválido.');
+        }
+        continue;
       }
       if (orderIds.contains(id)) {
         duplicateCount++;
         continue;
       }
-      if (weight < 0 ||
-          price < 0 ||
+      if (price < 0 ||
           freight < 0 ||
+          itemsCount < 1 ||
+          sellersCount < 1 ||
           dispatched.isBefore(purchase) ||
           estimated.isBefore(purchase)) {
         invalidCount++;
@@ -103,8 +137,14 @@ class ShipmentCsvService {
         continue;
       }
       orderIds.add(id);
+      final weightRaw = field(row, 'total_weight_g');
+      final volumeRaw = field(row, 'total_volume_cm3');
+      final distRaw = field(row, 'distance_km');
       shipments.add({
         'id': id,
+        'order_id': id,
+        'origin_zip_code': originZip,
+        'destination_zip_code': destZip,
         'origin': sellerState,
         'destination': customerState,
         'seller_state': sellerState,
@@ -112,19 +152,17 @@ class ShipmentCsvService {
         'purchase_at': purchase,
         'dispatched_at': dispatched,
         'estimated_delivery_at': estimated,
-        'weight_g': weight,
+        'weight_g': weightRaw.isEmpty ? 0 : number(weightRaw, 'total_weight_g', line),
         'price': price,
         'freight_value': freight,
-        'items_count': field(row, 'items_count').isEmpty
-            ? 1
-            : number(field(row, 'items_count'), 'items_count', line).round(),
-        'sellers_count': field(row, 'sellers_count').isEmpty
-            ? 1
-            : number(field(row, 'sellers_count'), 'sellers_count', line)
-                .round(),
-        'total_volume_cm3': field(row, 'total_volume_cm3').isEmpty
+        'items_count': itemsCount,
+        'sellers_count': sellersCount,
+        'total_volume_cm3': volumeRaw.isEmpty
             ? null
-            : number(field(row, 'total_volume_cm3'), 'total_volume_cm3', line),
+            : number(volumeRaw, 'total_volume_cm3', line),
+        'distance_km': distRaw.isEmpty
+            ? null
+            : number(distRaw, 'distance_km', line),
         'days': estimated.difference(dispatched).inDays,
       });
     }

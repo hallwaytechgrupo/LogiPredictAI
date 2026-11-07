@@ -14,7 +14,8 @@ test('candidate API keeps blank cities pending and activates a candidate after r
   directory = await mkdtemp(path.join(os.tmpdir(), 'logipredict-hubs-'));
   hubsFile = path.join(directory, 'hubs.json');
   await writeFile(hubsFile, '[]');
-  server = createApp({ hubsFile }).listen(0);
+  const app = await createApp({ hubsFile });
+  server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   baseUrl = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => {

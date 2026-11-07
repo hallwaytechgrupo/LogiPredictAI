@@ -25,7 +25,8 @@ test('order association validates a hub, persists it, and is returned by GET', a
     { order_id: 'legacy-order', createdAt: '2020-01-01T00:00:00.000Z' },
   ]));
 
-  const server = createApp({ hubsFile, ordersFile }).listen(0);
+  const app = await createApp({ hubsFile, ordersFile });
+  const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => {
@@ -107,7 +108,8 @@ test('order import rejects invalid and duplicate order identifiers atomically', 
   const hubsFile = path.join(directory, 'hubs.json');
   const ordersFile = path.join(directory, 'orders.json');
   await writeFile(hubsFile, '[]');
-  const server = createApp({ hubsFile, ordersFile }).listen(0);
+  const app = await createApp({ hubsFile, ordersFile });
+  const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => {
@@ -140,7 +142,8 @@ test('demo import assigns the selected hub only to unassociated orders and prese
     { order_id: 'already-linked', hub_id: existingHub.id },
     { order_id: 'no-hub-yet', hub_id: null },
   ]));
-  const server = createApp({ hubsFile, ordersFile }).listen(0);
+  const app = await createApp({ hubsFile, ordersFile });
+  const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => {
@@ -186,7 +189,8 @@ test('configured Olist dataset endpoint returns CSV and reports a missing datase
   const datasetFile = path.join(directory, 'olist.csv');
   await writeFile(hubsFile, '[]');
   await writeFile(datasetFile, 'order_id,seller_state\norder-1,SP\n');
-  const server = createApp({ hubsFile, olistDatasetFile: datasetFile }).listen(0);
+  const app = await createApp({ hubsFile, olistDatasetFile: datasetFile });
+  const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => {
