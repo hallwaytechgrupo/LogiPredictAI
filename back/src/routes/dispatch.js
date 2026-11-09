@@ -44,20 +44,20 @@ async function getActiveHubs() {
 }
 
 /**
- * Calcula rota via OpenRouteService.
+ * Calcula rota via OpenRouteService com waypoints obrigatórios.
+ * Usa formato GeoJSON para obter coordenadas explícitas (LineString).
+ * @param {Array<{latitude: number, longitude: number}>} waypoints - Sequência de pontos: origem, hub origem, hub destino, destino
  */
-async function getRouteViaOpenRouteService(originHub, destHub) {
+async function getRouteViaOpenRouteService(waypoints) {
   const key = process.env.OPENROUTE_API_KEY;
   if (!key) {
     return { error: 'OPENROUTE_KEY_MISSING', message: 'Chave API OpenRouteService não configurada.' };
   }
 
-  const url = `https://api.openrouteservice.org/v2/directions/driving-car?api_key=${key}`;
+  // Use /geojson format to get explicit LineString coordinates instead of encoded polyline
+  const url = `https://api.openrouteservice.org/v2/directions/driving-car/geojson?api_key=${key}`;
   const body = JSON.stringify({
-    coordinates: [
-      [originHub.longitude, originHub.latitude],
-      [destHub.longitude, destHub.latitude],
-    ],
+    coordinates: waypoints.map(wp => [wp.longitude, wp.latitude]),
   });
 
   try {
@@ -73,22 +73,37 @@ async function getRouteViaOpenRouteService(originHub, destHub) {
     }
 
     const data = await response.json();
-    // OpenRouteService v2 returns { routes: [{ segments: [{ distance, duration }], geometry, summary }] }
-    const routes = data.routes;
-    if (!routes || routes.length === 0) {
+    // GeoJSON format returns { type: "FeatureCollection", features: [{ type: "Feature", geometry: { type: "LineString", coordinates: [...] }, properties: { segments: [...], summary: {...} } }] }
+    const features = data.features;
+    if (!features || features.length === 0) {
       return { error: 'OPENROUTE_NO_ROUTE', message: 'Nenhuma rota encontrada.' };
     }
 
-    const routeData = routes[0];
-    const segment = routeData.segments?.[0];
-    if (!segment || !segment.distance) {
+    const feature = features[0];
+    const properties = feature.properties || {};
+    const segments = properties.segments || [];
+    if (segments.length === 0) {
       return { error: 'OPENROUTE_NO_ROUTE', message: 'Nenhuma rota encontrada.' };
     }
+
+    // Sum all segments for multi-waypoint routes
+    let totalDistance = 0;
+    let totalDuration = 0;
+    for (const seg of segments) {
+      totalDistance += seg.distance || 0;
+      totalDuration += seg.duration || 0;
+    }
+    if (totalDistance === 0) {
+      return { error: 'OPENROUTE_NO_ROUTE', message: 'Nenhuma rota encontrada.' };
+    }
+
+    // Extract GeoJSON LineString geometry with explicit coordinates
+    const geometry = feature.geometry || null;
 
     return {
-      distance_km: Math.round(segment.distance / 1000 * 100) / 100,
-      duration_seconds: Math.round(segment.duration),
-      geometry: routeData.geometry || null,
+      distance_km: Math.round(totalDistance / 1000 * 100) / 100,
+      duration_seconds: Math.round(totalDuration),
+      geometry,
     };
   } catch (e) {
     return { error: 'OPENROUTE_UNAVAILABLE', message: `Serviço de roteamento indisponível: ${e.message}` };
@@ -174,11 +189,17 @@ router.post('/simulate', async (req, res) => {
       destHub.latitude, destHub.longitude
     );
 
-    // Tentar rota rodoviária
+    // Tentar rota rodoviária com waypoints: origem → hub origem → hub destino → destino
     let route = null;
     let routeWarnings = [];
     if (!sameHub) {
-      const routeResult = await getRouteViaOpenRouteService(originHub, destHub);
+      const waypoints = [
+        { latitude: originGeo.latitude, longitude: originGeo.longitude },
+        { latitude: originHub.latitude, longitude: originHub.longitude },
+        { latitude: destHub.latitude, longitude: destHub.longitude },
+        { latitude: destGeo.latitude, longitude: destGeo.longitude },
+      ];
+      const routeResult = await getRouteViaOpenRouteService(waypoints);
       if (routeResult.error) {
         // Provide structured warnings based on error type
         if (routeResult.error === 'OPENROUTE_KEY_MISSING') {

@@ -688,96 +688,159 @@ extension _DashboardSimulatorScreen on _DashboardScreenState {
     final originHub = data['origin_hub'] as Map<String, dynamic>? ?? {};
     final destHub = data['destination_hub'] as Map<String, dynamic>? ?? {};
     final routeData = data['route'] as Map<String, dynamic>?;
+    final warnings = data['warnings'] as List? ?? [];
+    final sameHub = data['same_hub'] as bool? ?? false;
 
     final markers = <Marker>[];
+    final allPoints = <LatLng>[];
+
+    LatLng? toLatLng(Map<String, dynamic> point) {
+      if (point.isEmpty || point['latitude'] == null || point['longitude'] == null) {
+        return null;
+      }
+      return LatLng(
+        (point['latitude'] as num).toDouble(),
+        (point['longitude'] as num).toDouble(),
+      );
+    }
 
     // Origin location
-    if (origin.isNotEmpty && origin['latitude'] != null && origin['longitude'] != null) {
+    final originPoint = toLatLng(origin);
+    if (originPoint != null) {
       markers.add(Marker(
-        point: LatLng(
-          (origin['latitude'] as num).toDouble(),
-          (origin['longitude'] as num).toDouble(),
-        ),
+        point: originPoint,
         child: const Icon(Icons.location_on, color: Colors.grey, size: 30),
       ));
+      allPoints.add(originPoint);
     }
     // Destination location
-    if (dest.isNotEmpty && dest['latitude'] != null && dest['longitude'] != null) {
+    final destPoint = toLatLng(dest);
+    if (destPoint != null) {
       markers.add(Marker(
-        point: LatLng(
-          (dest['latitude'] as num).toDouble(),
-          (dest['longitude'] as num).toDouble(),
-        ),
+        point: destPoint,
         child: const Icon(Icons.location_on, color: Colors.purple, size: 30),
       ));
+      allPoints.add(destPoint);
     }
     // Origin hub
-    if (originHub.isNotEmpty && originHub['latitude'] != null && originHub['longitude'] != null) {
+    final originHubPoint = toLatLng(originHub);
+    if (originHubPoint != null) {
       markers.add(Marker(
-        point: LatLng(
-          (originHub['latitude'] as num).toDouble(),
-          (originHub['longitude'] as num).toDouble(),
-        ),
+        point: originHubPoint,
         child: const Icon(Icons.local_shipping, color: Colors.blue, size: 36),
       ));
+      allPoints.add(originHubPoint);
     }
     // Destination hub
-    if (destHub.isNotEmpty && destHub['latitude'] != null && destHub['longitude'] != null) {
+    final destHubPoint = toLatLng(destHub);
+    if (destHubPoint != null) {
       markers.add(Marker(
-        point: LatLng(
-          (destHub['latitude'] as num).toDouble(),
-          (destHub['longitude'] as num).toDouble(),
-        ),
+        point: destHubPoint,
         child: const Icon(Icons.local_shipping, color: Colors.green, size: 36),
       ));
+      allPoints.add(destHubPoint);
     }
 
     // Route polyline from OpenRouteService geometry
     final polylines = <Polyline>[];
-    if (routeData != null && routeData['geometry'] != null) {
+    bool routeAvailable = false;
+    bool routeFailed = false;
+    String? routeFailureReason;
+
+    if (sameHub) {
+      // Same hub — no route needed
+      routeFailed = false;
+    } else if (routeData != null && routeData['geometry'] != null) {
       final geometry = routeData['geometry'];
+      // Debug: log geometry type for troubleshooting
+      debugPrint('Dispatch map: geometry type = ${geometry.runtimeType}');
       if (geometry is Map<String, dynamic> && geometry['coordinates'] is List) {
-        final coords = (geometry['coordinates'] as List)
-            .whereType<List<num>>()
-            .map((c) => LatLng(c[1].toDouble(), c[0].toDouble()))
-            .toList();
+        final coordsList = geometry['coordinates'] as List;
+        debugPrint('Dispatch map: coordinates count = ${coordsList.length}, first item type = ${coordsList.isNotEmpty ? coordsList.first.runtimeType : "empty"}');
+        // Convert coordinates: GeoJSON format is [longitude, latitude], but we need LatLng(latitude, longitude)
+        // Accept any List that has at least 2 numeric elements, regardless of specific type
+        final coords = <LatLng>[];
+        for (final item in coordsList) {
+          if (item is List && item.length >= 2) {
+            try {
+              final lng = (item[0] as num).toDouble();
+              final lat = (item[1] as num).toDouble();
+              if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+                coords.add(LatLng(lat, lng));
+              } else {
+                debugPrint('Dispatch map: skipping invalid coordinate [$lng, $lat]');
+              }
+            } catch (e) {
+              debugPrint('Dispatch map: failed to convert coordinate: $e');
+            }
+          }
+        }
+        debugPrint('Dispatch map: converted ${coords.length} valid coordinates');
         if (coords.length >= 2) {
           polylines.add(Polyline(
             points: coords,
             color: Colors.indigo,
-            strokeWidth: 4,
+            strokeWidth: 5,
           ));
+          // Add route geometry points to allPoints for camera framing
+          allPoints.addAll(coords);
+          routeAvailable = true;
+        } else {
+          routeFailed = true;
+          routeFailureReason = 'Geometria da rota com pontos insuficientes.';
         }
+      } else {
+        routeFailed = true;
+        routeFailureReason = 'Geometria da rota em formato inválido.';
+      }
+    } else {
+      // Check if route failed due to OpenRouteService issues
+      final hasOpenRouteWarning = warnings.any((w) {
+        final text = w.toString().toLowerCase();
+        return text.contains('openroute') ||
+               text.contains('haversine') ||
+               text.contains('linha reta') ||
+               text.contains('roteamento indisponível');
+      });
+      if (hasOpenRouteWarning) {
+        routeFailed = true;
+        routeFailureReason = 'Rota rodoviária não disponível. Apenas distância geográfica (Haversine) está disponível.';
       }
     }
 
     // Calculate initial center and zoom from all points
     LatLng center = const LatLng(-14.235, -51.9253);
     double zoom = 4;
-    final allPoints = <LatLng>[];
-    if (originHub.isNotEmpty && originHub['latitude'] != null) {
-      allPoints.add(LatLng(
-        (originHub['latitude'] as num).toDouble(),
-        (originHub['longitude'] as num).toDouble(),
-      ));
-    }
-    if (destHub.isNotEmpty && destHub['latitude'] != null) {
-      allPoints.add(LatLng(
-        (destHub['latitude'] as num).toDouble(),
-        (destHub['longitude'] as num).toDouble(),
-      ));
-    }
     if (allPoints.isNotEmpty) {
-      center = allPoints.first;
-      if (allPoints.length > 1) {
-        // Simple center calculation
-        double latSum = 0, lngSum = 0;
-        for (final p in allPoints) {
-          latSum += p.latitude;
-          lngSum += p.longitude;
-        }
-        center = LatLng(latSum / allPoints.length, lngSum / allPoints.length);
+      double latMin = allPoints.first.latitude;
+      double latMax = allPoints.first.latitude;
+      double lngMin = allPoints.first.longitude;
+      double lngMax = allPoints.first.longitude;
+      for (final p in allPoints) {
+        if (p.latitude < latMin) latMin = p.latitude;
+        if (p.latitude > latMax) latMax = p.latitude;
+        if (p.longitude < lngMin) lngMin = p.longitude;
+        if (p.longitude > lngMax) lngMax = p.longitude;
+      }
+      center = LatLng((latMin + latMax) / 2, (lngMin + lngMax) / 2);
+      // Calculate zoom based on bounding box
+      final latDiff = latMax - latMin;
+      final lngDiff = lngMax - lngMin;
+      final maxDiff = latDiff > lngDiff ? latDiff : lngDiff;
+      if (maxDiff > 10) {
+        zoom = 4;
+      } else if (maxDiff > 5) {
+        zoom = 5;
+      } else if (maxDiff > 2) {
         zoom = 6;
+      } else if (maxDiff > 0.5) {
+        zoom = 8;
+      } else if (maxDiff > 0.1) {
+        zoom = 10;
+      } else if (maxDiff > 0.01) {
+        zoom = 12;
+      } else {
+        zoom = 13;
       }
     }
 
@@ -794,6 +857,40 @@ extension _DashboardSimulatorScreen on _DashboardScreenState {
             'Pontos: origem (cinza), destino (roxo), hub de origem (azul), hub de destino (verde).',
             style: TextStyle(fontSize: 11, color: _secondaryText),
           ),
+          if (routeAvailable)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'Rota rodoviária calculada via OpenRouteService (origem → hub origem → hub destino → destino).',
+                style: TextStyle(fontSize: 11, color: Colors.green.shade700),
+              ),
+            ),
+          if (routeFailed && routeFailureReason != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 18),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        routeFailureReason,
+                        style: const TextStyle(color: Colors.orange, fontSize: 11),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           const SizedBox(height: 10),
           ClipRRect(
             borderRadius: BorderRadius.circular(8),

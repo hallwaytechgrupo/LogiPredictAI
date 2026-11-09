@@ -682457,7 +682457,10 @@
     "total_volume_cm3": null,
     "source": "operational",
     "created_at": "2026-11-06T20:53:28.679Z",
-    "updated_at": "2026-11-06T20:53:28.679Z"
+    "updated_at": "2026-11-06T20:53:28.679Z",
+    "hub_id": "c5060af8-4aec-4325-a0f7-08374ec0b169",
+    "hub_association_manual": true,
+    "updatedAt": "2026-11-09T22:13:31.255Z"
   },
   {
     "order_id": "TESTE-0007",
