@@ -12,18 +12,9 @@ import { create as createOrder, findById as findOrderById, list as listOrders, u
 import { listActive as listActiveHubs, findById as findHubById } from '../db/repositories/hubs.js';
 import { getGeolocationIndex } from '../geolocation.js';
 import { haversineKm } from '../utils.js';
+import { ORDER_STATUSES, orderStatus } from '../order-status.js';
 
 const router = express.Router();
-const ORDER_STATUSES = new Set([
-  'created', 'approved', 'invoiced', 'processing', 'shipped',
-  'delivered', 'canceled', 'unavailable', 'unknown',
-]);
-
-function orderStatus(value) {
-  const status = typeof value === 'string' ? value.trim().toLowerCase() : '';
-  return status || 'unknown';
-}
-
 function numericValue(value) {
   if (value == null || value === '') return null;
   const number = Number(value);
@@ -152,6 +143,7 @@ router.post('/import', (req, res) => req.app.locals.serializeOrderMutation(async
       const id = item.order_id.trim();
       const existing = existingMap.get(id);
       if (existing) {
+        existing.status = orderStatus(existing);
         if (existing.hub_id) {
           // Preserva hub existente
           const result = { order_id: id, hub_id: existing.hub_id, imported: false, hub_preserved: true };
@@ -170,7 +162,7 @@ router.post('/import', (req, res) => req.app.locals.serializeOrderMutation(async
         }
       } else {
         const hubId = item.hub_id || default_hub_id || null;
-        const newOrder = { order_id: id, hub_id: hubId, status: orderStatus(item.status ?? item.order_status), createdAt: now, updatedAt: now };
+        const newOrder = { order_id: id, hub_id: hubId, status: orderStatus(item), createdAt: now, updatedAt: now };
         if (source !== undefined) newOrder.source = source;
         existingOrders.push(newOrder);
         existingMap.set(id, newOrder);
@@ -182,7 +174,9 @@ router.post('/import', (req, res) => req.app.locals.serializeOrderMutation(async
     }
 
     await writeOrdersJson(req, existingOrders);
-    return res.json({ data: results, total: results.length });
+    return res.json({ data: results.map((result) => ({
+      ...result, status: existingMap.get(result.order_id).status,
+    })), total: results.length });
   } catch (error) {
     console.error('Falha no import legacy:', error.message, error.stack);
     return res.status(500).json({ error: 'ORDER_STORAGE_ERROR', message: 'Não foi possível importar os pedidos.' });
@@ -320,7 +314,7 @@ router.post('/import-csv', (req, res) => req.app.locals.serializeOrderMutation(a
       continue;
     }
 
-    const status = orderStatus(at(row, 'status') || at(row, 'order_status'));
+    const status = orderStatus({ status: at(row, 'status') || at(row, 'order_status'), dispatched_at: dispatchedAt });
     if (!ORDER_STATUSES.has(status)) {
       failed.push({ line: i + 1, order_id: orderId, reason: `status inválido: ${status}` });
       continue;
@@ -356,8 +350,8 @@ router.post('/import-csv', (req, res) => req.app.locals.serializeOrderMutation(a
       distance_km: distanceKm ? distanceKm.value : null,
       total_weight_g: totalWeightG ? totalWeightG.value : null,
       total_volume_cm3: totalVolumeCm3 ? totalVolumeCm3.value : null,
-      status,
       source: 'operational',
+      status: orderStatus({ status, dispatched_at: dispatchedAt }),
     };
 
     // Tentar criar no repositório PostgreSQL
@@ -576,12 +570,12 @@ router.get('/', async (req, res) => {
 
     const enriched = result.data.map((order) => ({
       order_id: order.order_id,
+      status: orderStatus(order),
       origin_zip_code: order.origin_zip_code,
       destination_zip_code: order.destination_zip_code,
       purchase_at: order.purchase_at,
       dispatched_at: order.dispatched_at,
       estimated_delivery_at: order.estimated_delivery_at,
-      status: orderStatus(order.status ?? order.order_status),
       seller_state: order.seller_state,
       customer_state: order.customer_state,
       items_count: numericValue(order.items_count),
@@ -675,12 +669,12 @@ router.get('/:orderId', async (req, res) => {
 
     return res.json({ data: {
       order_id: order.order_id,
+      status: orderStatus(order),
       origin_zip_code: order.origin_zip_code,
       destination_zip_code: order.destination_zip_code,
       purchase_at: order.purchase_at,
       dispatched_at: order.dispatched_at,
       estimated_delivery_at: order.estimated_delivery_at,
-      status: orderStatus(order.status ?? order.order_status),
       seller_state: order.seller_state,
       customer_state: order.customer_state,
       items_count: numericValue(order.items_count),

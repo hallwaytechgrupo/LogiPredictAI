@@ -4,6 +4,33 @@ Para demonstrar FE-04 e BE-02, importe `back/data/exemplos_fe04_be02.csv` pela a
 
 `POST /predict` implementa o BE-03 com peso em gramas (`total_weight_g`), distância Haversine em quilômetros (`distance_km`) e prazo restante em dias de calendário (`remaining_days`). Retorna Baixo, Médio ou Alto a partir dos percentis de transporte de 53.327 pedidos reais da Olist. [Contrato, regras, fonte e reprodução](../docs/be-03-predict.md).
 
+## BE-02 — contrato de listagem de pedidos
+
+O recurso da atividade `GET /orders` está disponível como `GET /api/v1/orders`,
+mantendo a rota versionada usada pela aplicação. A listagem e o detalhe retornam
+o status operacional (`pending`, `created`, `approved`, `invoiced`, `processing`, `shipped`, `delivered`, `canceled`, `unavailable`, `unknown`) e a data
+prometida `estimated_delivery_at`. A tela de pedidos mostra ambos na tabela e
+no botão **Ver detalhes**.
+
+Novas importações persistem o status em PostgreSQL ou JSON. A coluna `status`
+é opcional no CSV; o padrão é `shipped` quando existe despacho, ou `unknown`
+sem despacho. O importador JSON também aceita `status` por pedido e preserva
+o status de pedidos já registrados. A migração de banco roda automaticamente
+ao iniciar a API. [Contrato e compatibilidade com registros antigos](../docs/api.md#listagem-de-pedidos).
+
+Após atualizar o código, reconstrua os serviços para aplicar a migração e a tela:
+
+```bash
+docker compose up -d --build api web
+```
+
+Os testes de status e listagem podem usar o fallback JSON sem acessar o banco
+de desenvolvimento, a partir de `back/`:
+
+```bash
+DB_HOST=127.0.0.1 DB_PORT=1 node --test test/order_status.test.js test/orders_list_api.test.js
+```
+
 ## Simulação automatizada do dataset Olist
 
 O arquivo preparado para o simulador Flutter fica por padrão em `back/data/pedidos_logipredict.csv` (97.641 linhas de pedidos no dataset atual). Em execução local, a API procura `data/pedidos_logipredict.csv` relativo ao diretório de trabalho do backend. É possível mudar o arquivo com `OLIST_DATASET_FILE=data/meu_dataset_olist.csv`.

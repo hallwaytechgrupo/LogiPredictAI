@@ -20,7 +20,10 @@ class OrdersScreen extends StatefulWidget {
   /// (por exemplo, após associação de hub no Simulador Logístico).
   final ValueNotifier<int>? refreshTrigger;
 
-  const OrdersScreen({super.key, this.refreshTrigger});
+  const OrdersScreen({super.key, this.refreshTrigger, this.ordersApi, this.hubsApi});
+
+  final OrdersApi? ordersApi;
+  final HubsApi? hubsApi;
 
   @override
   State<OrdersScreen> createState() => _OrdersScreenState();
@@ -46,8 +49,8 @@ extension _OrderFilterExtension on _OrderFilter {
 }
 
 class _OrdersScreenState extends State<OrdersScreen> {
-  final _ordersApi = OrdersApi();
-  final _hubsApi = HubsApi();
+  late final _ordersApi = widget.ordersApi ?? OrdersApi();
+  late final _hubsApi = widget.hubsApi ?? HubsApi();
   final _searchController = TextEditingController();
 
   // Summary
@@ -350,6 +353,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   String _statusLabel(String? status) {
     const labels = {
+      'pending': 'Pendente',
       'created': 'Criado',
       'approved': 'Aprovado',
       'invoiced': 'Faturado',

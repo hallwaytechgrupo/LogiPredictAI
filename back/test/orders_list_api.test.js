@@ -1,9 +1,12 @@
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { createApp } from '../src/app.js';
+import { getKnex } from '../src/db/knex.js';
+
+after(async () => getKnex().destroy());
 
 test('GET /api/v1/orders returns empty list when no orders exist', async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'logipredict-orders-list-'));
@@ -52,6 +55,7 @@ test('GET /api/v1/orders returns paginated orders with hub enrichment', async (t
       order_id: `order-${i}`,
       hub_id: i === 0 ? hubId : null,
       source: 'olist',
+      ...(i === 0 ? { status: 'delivered', estimated_delivery_at: '2026-10-20T00:00:00' } : {}),
       createdAt: now,
       updatedAt: now,
     });
@@ -83,11 +87,14 @@ test('GET /api/v1/orders returns paginated orders with hub enrichment', async (t
     assert.equal(first.hub.code, 'HUB-01');
     assert.equal(first.hub.state, 'PR');
     assert.equal(first.source, 'olist');
+    assert.equal(first.status, 'delivered');
+    assert.equal(first.estimated_delivery_at, '2026-10-20T00:00:00');
     // Second order has no hub
     const second = body.data.find((o) => o.order_id === 'order-1');
     assert.ok(second);
     assert.equal(second.hub_id, null);
     assert.equal(second.hub, null);
+    assert.equal(second.status, 'unknown');
   }
 
   // Pagination: per_page=2

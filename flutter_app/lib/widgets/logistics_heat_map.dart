@@ -162,6 +162,8 @@ class _LogisticsHeatMapState extends State<LogisticsHeatMap> {
     const navy = Color(0xFF0F172A);
     const blue = Color(0xFF2563EB);
     const muted = Color(0xFF64748B);
+    final colors = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     Widget mapContent;
     if (widget.loading) {
@@ -384,8 +386,8 @@ class _LogisticsHeatMapState extends State<LogisticsHeatMap> {
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(
-                    Icons.local_shipping, size: 16, color: Color(0xFF1565C0)),
+                Icon(Icons.local_shipping, size: 16,
+                    color: isDark ? colors.primary : const Color(0xFF1565C0)),
                 const SizedBox(width: 5),
                 Text(
                   'Hubs logísticos: ${widget.mapHubs.where((h) => h.hasValidCoordinates).length} com coordenadas',
@@ -399,9 +401,14 @@ class _LogisticsHeatMapState extends State<LogisticsHeatMap> {
               width: double.infinity,
               clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
+                color: isDark
+                    ? colors.surfaceContainerLow
+                    : const Color(0xFFF8FAFC),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
+                border: Border.all(
+                    color: isDark
+                        ? colors.outlineVariant
+                        : const Color(0xFFE2E8F0)),
               ),
               child: mapContent,
             ),
@@ -413,13 +420,17 @@ class _LogisticsHeatMapState extends State<LogisticsHeatMap> {
   }
 
   Widget _buildCard({required Widget child}) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? colors.surface : Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(
+            color: isDark ? colors.outlineVariant : const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
@@ -428,7 +439,13 @@ class _LogisticsHeatMapState extends State<LogisticsHeatMap> {
           ),
         ],
       ),
-      child: child,
+      child: DefaultTextStyle.merge(
+        style: TextStyle(color: colors.onSurface),
+        child: IconTheme.merge(
+          data: IconThemeData(color: colors.onSurfaceVariant),
+          child: child,
+        ),
+      ),
     );
   }
 }

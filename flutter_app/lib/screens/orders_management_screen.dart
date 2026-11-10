@@ -93,14 +93,71 @@ class _OrdersManagementScreenState extends State<OrdersManagementScreen> {
     }
   }
 
+  String _formatStatus(dynamic status) {
+    return switch (status) {
+      'pending' => 'Pendente',
+      'shipped' => 'Despachado',
+      'delivered' => 'Entregue',
+      'canceled' => 'Cancelado',
+      _ => 'Não informado',
+    };
+  }
+
+  void _showOrderDetails(String orderId) {
+    final request = _api.getOrder(orderId);
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Pedido $orderId'),
+        content: FutureBuilder<Map<String, dynamic>>(
+          future: request,
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return Text(
+                  'Não foi possível carregar o pedido: ${snapshot.error}');
+            }
+            if (!snapshot.hasData) {
+              return const SizedBox(
+                  height: 80,
+                  child: Center(child: CircularProgressIndicator()));
+            }
+            final order = snapshot.data!;
+            return SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Status: ${_formatStatus(order['status'])}'),
+                  Text(
+                      'Entrega prometida: ${_formatDate(order['estimated_delivery_at'])}'),
+                  Text('Compra: ${_formatDate(order['purchase_at'])}'),
+                  Text('Despacho: ${_formatDate(order['dispatched_at'])}'),
+                  Text('Hub responsável: ${_formatHub(order['hub'])}'),
+                ],
+              ),
+            );
+          },
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Fechar'))
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final surface = isDark ? const Color(0xFF172338) : Colors.white;
-    final surfaceAlt = isDark ? const Color(0xFF202F46) : const Color(0xFFF8FAFC);
+    final surfaceAlt =
+        isDark ? const Color(0xFF202F46) : const Color(0xFFF8FAFC);
     final border = isDark ? const Color(0xFF33445D) : const Color(0xFFE2E8F0);
-    final primaryText = isDark ? const Color(0xFFE2E8F0) : const Color(0xFF0F172A);
-    final secondaryText = isDark ? const Color(0xFFB5C2D4) : const Color(0xFF64748B);
+    final primaryText =
+        isDark ? const Color(0xFFE2E8F0) : const Color(0xFF0F172A);
+    final secondaryText =
+        isDark ? const Color(0xFFB5C2D4) : const Color(0xFF64748B);
 
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -110,8 +167,8 @@ class _OrdersManagementScreenState extends State<OrdersManagementScreen> {
           // Header
           Row(
             children: [
-              Icon(Icons.receipt_long_outlined,
-                  color: const Color(0xFF2563EB), size: 20),
+              const Icon(Icons.receipt_long_outlined,
+                  color: Color(0xFF2563EB), size: 20),
               const SizedBox(width: 8),
               Text('Pedidos Importados',
                   style: TextStyle(
@@ -168,9 +225,7 @@ class _OrdersManagementScreenState extends State<OrdersManagementScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   TextButton.icon(
-                    onPressed: _page > 1
-                        ? () => _load(page: _page - 1)
-                        : null,
+                    onPressed: _page > 1 ? () => _load(page: _page - 1) : null,
                     icon: const Icon(Icons.chevron_left, size: 18),
                     label: const Text('Anterior'),
                   ),
@@ -198,14 +253,13 @@ class _OrdersManagementScreenState extends State<OrdersManagementScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.error_outline, size: 48,
-              color: Color(0xFFEF4444)),
+          const Icon(Icons.error_outline, size: 48, color: Color(0xFFEF4444)),
           const SizedBox(height: 12),
-          Text('Erro ao carregar pedidos',
+          const Text('Erro ao carregar pedidos',
               style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
-                  color: const Color(0xFFEF4444))),
+                  color: Color(0xFFEF4444))),
           const SizedBox(height: 8),
           Text(_error ?? 'Não foi possível conectar à API.',
               textAlign: TextAlign.center,
@@ -221,20 +275,19 @@ class _OrdersManagementScreenState extends State<OrdersManagementScreen> {
   }
 
   Widget _buildEmptyState() {
-    return Center(
+    return const Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.inbox_outlined, size: 56,
-              color: Color(0xFF94A3B8)),
-          const SizedBox(height: 12),
+          Icon(Icons.inbox_outlined, size: 56, color: Color(0xFF94A3B8)),
+          SizedBox(height: 12),
           Text('Nenhum pedido importado',
               style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
-                  color: const Color(0xFF64748B))),
-          const SizedBox(height: 8),
-          const Text(
+                  color: Color(0xFF64748B))),
+          SizedBox(height: 8),
+          Text(
               'Importe pedidos via CSV ou execute uma simulação em lote para registrar pedidos.',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8))),
@@ -243,9 +296,8 @@ class _OrdersManagementScreenState extends State<OrdersManagementScreen> {
     );
   }
 
-  Widget _buildTable(
-      Color surface, Color surfaceAlt, Color border, Color primaryText,
-      Color secondaryText) {
+  Widget _buildTable(Color surface, Color surfaceAlt, Color border,
+      Color primaryText, Color secondaryText) {
     return SingleChildScrollView(
       scrollDirection: Axis.vertical,
       child: SingleChildScrollView(
@@ -255,18 +307,25 @@ class _OrdersManagementScreenState extends State<OrdersManagementScreen> {
           border: TableBorder.all(color: border, width: 0.5),
           columns: const [
             DataColumn(label: Text('ID Pedido')),
+            DataColumn(label: Text('Status')),
+            DataColumn(label: Text('Entrega prometida')),
             DataColumn(label: Text('Hub responsável')),
             DataColumn(label: Text('Origem')),
             DataColumn(label: Text('Criado em')),
             DataColumn(label: Text('Atualizado em')),
+            DataColumn(label: Text('Detalhes')),
           ],
           rows: _orders.map((order) {
             final hub = order['hub'];
             return DataRow(cells: [
               DataCell(Text(
                 order['order_id']?.toString() ?? '',
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+                style:
+                    const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
               )),
+              DataCell(Text(_formatStatus(order['status']))),
+              DataCell(
+                  Text(_formatDate(order['estimated_delivery_at']) ?? '—')),
               DataCell(Text(
                 _formatHub(hub) ?? '—',
                 style: const TextStyle(fontSize: 12),
@@ -276,12 +335,18 @@ class _OrdersManagementScreenState extends State<OrdersManagementScreen> {
                 style: const TextStyle(fontSize: 12),
               )),
               DataCell(Text(
-                _formatDate(order['createdAt']) ?? '—',
+                _formatDate(order['created_at'] ?? order['createdAt']) ?? '—',
                 style: const TextStyle(fontSize: 12),
               )),
               DataCell(Text(
-                _formatDate(order['updatedAt']) ?? '—',
+                _formatDate(order['updated_at'] ?? order['updatedAt']) ?? '—',
                 style: const TextStyle(fontSize: 12),
+              )),
+              DataCell(IconButton(
+                tooltip: 'Ver detalhes',
+                icon: const Icon(Icons.visibility_outlined),
+                onPressed: () =>
+                    _showOrderDetails(order['order_id'].toString()),
               )),
             ]);
           }).toList(),

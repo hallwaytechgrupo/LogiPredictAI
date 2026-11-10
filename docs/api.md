@@ -85,11 +85,48 @@ O CSV de exemplo usa ponto e vírgula como separador para a abertura em colunas 
 
 Os CEPs do exemplo usam hífen, como `01001-000`, para preservar o zero inicial ao abrir e salvar no Excel. A API aceita esse formato e armazena os oito dígitos normalizados.
 
-O CSV aceita a coluna opcional `status`, também reconhecida como `order_status`. Os valores são `created` (Criado), `approved` (Aprovado), `invoiced` (Faturado), `processing` (Em preparação), `shipped` (Em transporte), `delivered` (Entregue), `canceled` (Cancelado), `unavailable` (Indisponível) e `unknown` (Não informado). O backend valida o valor por linha e o persiste. Quando ausente, retorna `unknown`, inclusive para pedidos antigos. Esse campo representa a situação logística informada pela fonte do pedido. O modelo calcula seu próprio resultado de risco a cada simulação.
+O CSV aceita a coluna opcional `status`, também reconhecida como `order_status`. Os valores são `pending` (Pendente), `created` (Criado), `approved` (Aprovado), `invoiced` (Faturado), `processing` (Em preparação), `shipped` (Em transporte), `delivered` (Entregue), `canceled` (Cancelado), `unavailable` (Indisponível) e `unknown` (Não informado). O backend valida o valor por linha e o persiste. Quando ausente, usa `shipped` se houver despacho e `unknown` nos demais casos. Esse campo representa a situação logística informada pela fonte do pedido. O modelo calcula seu próprio resultado de risco a cada simulação.
 
 A listagem e o detalhe `/api/v1/orders/:orderId` devolvem `status`, `estimated_delivery_at`, peso em gramas (`total_weight_g`), volume (`total_volume_cm3`) e distância (`distance_km`). Medidas e valores financeiros são números JSON ou `null`. A tela Pedidos exibe status e entrega prometida na tabela e nos detalhes. A seleção no Simulador Logístico carrega o detalhe completo antes de preencher o formulário, converte gramas para quilogramas e limpa campos ausentes. Os campos obrigatórios devem ser preenchidos para executar uma previsão.
 
 A migration `20261109000000_add_order_status.cjs` acrescenta a coluna de status às instalações PostgreSQL existentes. O servidor executa migrations ao iniciar. O fallback JSON aceita registros antigos sem regravação em massa. O resumo em `/api/v1/orders/summary` conta pedidos operacionais distintos com previsões persistidas, incluindo o histórico JSON/JSONL.
+
+Esta é a rota oficial da BE-02: `/orders` no enunciado corresponde ao recurso
+versionado `/api/v1/orders` usado pelo Flutter. Os pedidos demonstrativos já
+cadastrados e os registros Olist continuam sendo consultados nessa rota.
+
+Cada pedido da listagem e de `GET /api/v1/orders/:orderId` inclui `status` e,
+quando informada na importação, `estimated_delivery_at` (data prometida).
+O Flutter exibe esses campos na tabela e no diálogo **Ver detalhes**.
+
+| Status | Exibição | Significado |
+| --- | --- | --- |
+| `pending` | Pendente | Pedido registrado sem evidência de despacho |
+| `shipped` | Em transporte | Pedido despachado, sem confirmação de entrega |
+| `delivered` | Entregue | Entrega informada na origem dos dados |
+| `canceled` | Cancelado | Cancelamento informado na origem dos dados |
+
+`POST /api/v1/orders/import` aceita `status` opcional em cada pedido; sem ele,
+usa `unknown` (ou `shipped` se houver informação de despacho no item).
+Reimportar um pedido existente preserva seu status. Status inválido retorna
+HTTP 422 com `INVALID_STATUS`, antes de gravar qualquer pedido do lote.
+
+`POST /api/v1/orders/import-csv` aceita a coluna opcional `status`. Sem ela ou
+com célula vazia, usa `shipped`, pois esse CSV exige `dispatched_at`. Valores
+inválidos entram na relação de linhas com falha e não são persistidos.
+
+Novos pedidos persistem o status tanto no PostgreSQL quanto no fallback JSON.
+A migração `20250101000004_add_order_status.cjs`, executada na inicialização da API,
+preenche pedidos antigos do PostgreSQL com `shipped` quando possuem despacho e
+`unknown` nos demais casos. Registros JSON antigos sem status seguem a mesma
+regra na leitura e salvam o valor ao serem reimportados. O vencimento do prazo
+não é usado para deduzir uma entrega, um cancelamento ou o risco de atraso.
+O status é operacional e não é enviado como feature ao modelo de previsão.
+
+```bash
+curl 'http://localhost:3001/api/v1/orders?source=operational&per_page=5'
+curl 'http://localhost:3001/api/v1/orders/ID_DO_PEDIDO'
+```
 
 ### Parâmetros de consulta
 

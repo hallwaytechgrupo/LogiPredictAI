@@ -1,4 +1,5 @@
 import getKnex from '../knex.js';
+import { orderStatus } from '../../order-status.js';
 
 let dbAvailable = null; // null = unknown, true = available, false = unavailable
 
@@ -22,6 +23,7 @@ export function resetDbCache() {
 }
 
 export async function create(order) {
+  order = { ...order, status: orderStatus(order) };
   const available = await checkDb();
   if (!available) return null;
 
@@ -68,7 +70,7 @@ export async function list(options = {}) {
     if (source) query.where({ source });
 
     const total = Number((await query.clone().count('* as count').first()).count);
-    const data = await query.offset(offset).limit(perPage).orderBy('created_at', 'desc');
+    const data = await query.clone().offset(offset).limit(perPage).orderBy('created_at', 'desc');
 
     return { data, total, page, perPage };
   } catch (e) {
