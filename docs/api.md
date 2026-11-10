@@ -6,6 +6,7 @@ Base local: `http://127.0.0.1:3001`. Serviço Python interno: `http://127.0.0.1:
 | --- | --- | --- |
 | GET | `/health` | Processo da API disponível |
 | GET | `/ready` | Serviço Python e modelo disponíveis |
+| POST | `/predict` | Risco Baixo, Médio ou Alto por regras com referência histórica Olist |
 | GET | `/api/v1/model` | Versão, origem, features, limiar e métricas do treinamento |
 | POST | `/api/v1/predictions` | Classificação de um pedido no despacho |
 | GET | `/api/v1/analytics/states` | Pedidos e atrasos observados por UF |
@@ -13,6 +14,8 @@ Base local: `http://127.0.0.1:3001`. Serviço Python interno: `http://127.0.0.1:
 | POST | `/api/v1/orders/import` | Importa pedidos em lote |
 | GET | `/api/v1/orders/:orderId` | Consulta um pedido por ID |
 | PATCH | `/api/v1/orders/:orderId/hub` | Associa/dissocia hub a um pedido |
+
+O contrato BE-03 recebe `total_weight_g`, `distance_km` e `remaining_days` na porta 3001. As regras, dados observados, exemplos e limitações estão em [BE-03 · POST /predict](be-03-predict.md).
 
 ## Requisição de previsão
 
@@ -74,7 +77,19 @@ Copie `api/.env.example` para `api/.env` se precisar alterar host, porta, endere
 
 ## Listagem de pedidos
 
-`GET /api/v1/orders` retorna os pedidos importados via `POST /api/v1/orders/import`, com paginação e filtros opcionais.
+`GET /api/v1/orders` retorna os pedidos persistidos, com paginação e filtros opcionais. O CSV operacional é recebido em `POST /api/v1/orders/import-csv` como `{ "csv": "conteúdo do arquivo" }`. A importação por IDs em `/api/v1/orders/import` também está disponível.
+
+O arquivo `back/data/exemplos_fe04_be02.csv` contém cinco pedidos fictícios para importar pela aba Pedidos. Seus IDs começam com `DEMO-FE04-` e permitem demonstrar FE-04 e BE-02. A importação repetida preserva os pedidos existentes e informa os IDs ignorados.
+
+O CSV de exemplo usa ponto e vírgula como separador para a abertura em colunas no Excel com configuração regional brasileira. A leitura de CSV no Flutter e a importação de pedidos no Node identificam vírgula ou ponto e vírgula pelo cabeçalho. Campos entre aspas e vírgulas decimais nos arquivos separados por ponto e vírgula são preservados.
+
+Os CEPs do exemplo usam hífen, como `01001-000`, para preservar o zero inicial ao abrir e salvar no Excel. A API aceita esse formato e armazena os oito dígitos normalizados.
+
+O CSV aceita a coluna opcional `status`, também reconhecida como `order_status`. Os valores são `created` (Criado), `approved` (Aprovado), `invoiced` (Faturado), `processing` (Em preparação), `shipped` (Em transporte), `delivered` (Entregue), `canceled` (Cancelado), `unavailable` (Indisponível) e `unknown` (Não informado). O backend valida o valor por linha e o persiste. Quando ausente, retorna `unknown`, inclusive para pedidos antigos. Esse campo representa a situação logística informada pela fonte do pedido. O modelo calcula seu próprio resultado de risco a cada simulação.
+
+A listagem e o detalhe `/api/v1/orders/:orderId` devolvem `status`, `estimated_delivery_at`, peso em gramas (`total_weight_g`), volume (`total_volume_cm3`) e distância (`distance_km`). Medidas e valores financeiros são números JSON ou `null`. A tela Pedidos exibe status e entrega prometida na tabela e nos detalhes. A seleção no Simulador Logístico carrega o detalhe completo antes de preencher o formulário, converte gramas para quilogramas e limpa campos ausentes. Os campos obrigatórios devem ser preenchidos para executar uma previsão.
+
+A migration `20261109000000_add_order_status.cjs` acrescenta a coluna de status às instalações PostgreSQL existentes. O servidor executa migrations ao iniciar. O fallback JSON aceita registros antigos sem regravação em massa. O resumo em `/api/v1/orders/summary` conta pedidos operacionais distintos com previsões persistidas, incluindo o histórico JSON/JSONL.
 
 ### Parâmetros de consulta
 
@@ -84,6 +99,7 @@ Copie `api/.env.example` para `api/.env` se precisar alterar host, porta, endere
 | `per_page` | inteiro | 50 | 500 | Itens por página |
 | `hub_id` | texto | — | — | Filtra por hub associado |
 | `q` | texto | — | — | Busca texto contido no `order_id` |
+| `source` | texto | — | — | Filtra pela origem, como `operational` ou `olist` |
 
 ### Exemplo de resposta
 
@@ -92,6 +108,13 @@ Copie `api/.env.example` para `api/.env` se precisar alterar host, porta, endere
   "data": [
     {
       "order_id": "order-001",
+      "origin_zip_code": "01001000",
+      "destination_zip_code": "20040002",
+      "estimated_delivery_at": "2026-11-12T18:00:00",
+      "status": "shipped",
+      "total_weight_g": 500,
+      "total_volume_cm3": 1200,
+      "distance_km": 360,
       "hub_id": "hub-stable-id-1",
       "hub": {
         "id": "hub-stable-id-1",
@@ -100,9 +123,9 @@ Copie `api/.env.example` para `api/.env` se precisar alterar host, porta, endere
         "city": "São Paulo",
         "state": "SP"
       },
-      "source": "olist",
-      "createdAt": "2025-06-15T12:00:00.000Z",
-      "updatedAt": "2025-06-15T12:00:00.000Z"
+      "source": "operational",
+      "created_at": "2026-11-01T12:00:00.000Z",
+      "updated_at": "2026-11-01T12:00:00.000Z"
     }
   ],
   "total": 1,

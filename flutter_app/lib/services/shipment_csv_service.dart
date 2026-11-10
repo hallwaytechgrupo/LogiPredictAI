@@ -8,7 +8,7 @@ library;
 class ShipmentCsvService {
   const ShipmentCsvService._();
 
-  static ParsedShipmentCsv parseShipments(String content) {
+  static ParsedShipmentCsv parseShipments(String content, {bool requireZipCodes = false}) {
     final records = parseCsv(content.replaceFirst('\uFEFF', ''));
     if (records.length < 2) {
       throw const FormatException(
@@ -17,8 +17,6 @@ class ShipmentCsvService {
     final headers = records.first.map((h) => h.trim().toLowerCase()).toList();
     const required = <String>[
       'order_id',
-      'origin_zip_code',
-      'destination_zip_code',
       'purchase_at',
       'dispatched_at',
       'estimated_delivery_at',
@@ -29,7 +27,11 @@ class ShipmentCsvService {
       'price',
       'freight_value',
     ];
-    final missing = required.where((h) => !headers.contains(h)).toList();
+    final requiredHeaders = [
+      ...required,
+      if (requireZipCodes) ...['origin_zip_code', 'destination_zip_code'],
+    ];
+    final missing = requiredHeaders.where((h) => !headers.contains(h)).toList();
     if (missing.isNotEmpty) {
       throw FormatException(
           'Colunas obrigatórias ausentes: ${missing.join(', ')}.');
@@ -178,8 +180,16 @@ class ShipmentCsvService {
     );
   }
 
-  /// Parses comma-separated records, supporting quoted fields and escaped quotes.
+  /// Detects comma or semicolon separators from the header.
   static List<List<String>> parseCsv(String input) {
+    final rows = _parseCsv(input, ',');
+    if (rows.isNotEmpty && rows.first.length == 1 && rows.first.single.contains(';')) {
+      return _parseCsv(input, ';');
+    }
+    return rows;
+  }
+
+  static List<List<String>> _parseCsv(String input, String delimiter) {
     final rows = <List<String>>[];
     var row = <String>[];
     var field = StringBuffer();
@@ -194,7 +204,7 @@ class ShipmentCsvService {
         } else {
           quoted = !quoted;
         }
-      } else if (char == ',' && !quoted) {
+      } else if (char == delimiter && !quoted) {
         row.add(field.toString());
         field = StringBuffer();
       } else if ((char == '\n' || char == '\r') && !quoted) {

@@ -67,7 +67,7 @@ export async function list(options = {}) {
     if (status) query.where({ status });
     if (source) query.where({ source });
 
-    const total = (await query.count('* as count').first()).count;
+    const total = Number((await query.clone().count('* as count').first()).count);
     const data = await query.offset(offset).limit(perPage).orderBy('created_at', 'desc');
 
     return { data, total, page, perPage };
@@ -85,16 +85,16 @@ export async function summary() {
     const knex = getKnex();
     // Only count operational orders (source = 'operational')
     const ops = knex('orders').where({ source: 'operational' });
-    const total = (await ops.count('* as count').first()).count;
-    const withHub = (await ops.whereNotNull('hub_id').count('* as count').first()).count;
-    const withoutHub = (await ops.whereNull('hub_id').count('* as count').first()).count;
+    const total = Number((await ops.clone().count('* as count').first()).count);
+    const withHub = Number((await ops.clone().whereNotNull('hub_id').count('* as count').first()).count);
+    const withoutHub = Number((await ops.clone().whereNull('hub_id').count('* as count').first()).count);
 
     // Count orders with predictions
     const predicted = await knex('predictions')
       .join('orders', 'predictions.order_id', 'orders.order_id')
       .where({ 'orders.source': 'operational' })
       .countDistinct('predictions.order_id as count');
-    const withPrediction = predicted[0].count;
+    const withPrediction = Number(predicted[0].count);
 
     return { total, withHub, withoutHub, withPrediction };
   } catch (e) {

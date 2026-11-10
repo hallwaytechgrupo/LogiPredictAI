@@ -1,5 +1,9 @@
 # Cadastro de hubs
 
+Para demonstrar FE-04 e BE-02, importe `back/data/exemplos_fe04_be02.csv` pela aba Pedidos. O arquivo contém cinco pedidos fictícios identificados pelo prefixo `DEMO-FE04-`, com datas, pesos e status logísticos informados. A tabela e os detalhes exibem entrega prometida e status. O Simulador Logístico busca o detalhe completo ao selecionar um pedido importado. [Contrato e status aceitos](../docs/api.md#listagem-de-pedidos).
+
+`POST /predict` implementa o BE-03 com peso em gramas (`total_weight_g`), distância Haversine em quilômetros (`distance_km`) e prazo restante em dias de calendário (`remaining_days`). Retorna Baixo, Médio ou Alto a partir dos percentis de transporte de 53.327 pedidos reais da Olist. [Contrato, regras, fonte e reprodução](../docs/be-03-predict.md).
+
 ## Simulação automatizada do dataset Olist
 
 O arquivo preparado para o simulador Flutter fica por padrão em `back/data/pedidos_logipredict.csv` (97.641 linhas de pedidos no dataset atual). Em execução local, a API procura `data/pedidos_logipredict.csv` relativo ao diretório de trabalho do backend. É possível mudar o arquivo com `OLIST_DATASET_FILE=data/meu_dataset_olist.csv`.

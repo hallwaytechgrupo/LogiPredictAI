@@ -107,6 +107,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String _orderSearchQuery = '';
   List<Map<String, dynamic>> _orderSearchResults = [];
   bool _searchingOrders = false;
+  bool _loadingSelectedOrder = false;
+  int _orderSelectionRequest = 0;
   String? _orderSearchError;
 
   // Order geography map state (legacy, kept for backward compatibility)
@@ -747,61 +749,61 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return parsed.toIso8601String().substring(0, 16).replaceFirst('T', ' ');
   }
 
-  /// Fills the form fields from a selected order.
+  Future<void> _selectOrder(Map<String, dynamic> order) async {
+    final request = ++_orderSelectionRequest;
+    setState(() {
+      _loadingSelectedOrder = true;
+      _orderSearchError = null;
+    });
+    try {
+      final details = await _ordersApi.getOrder(order['order_id'].toString());
+      if (!mounted || request != _orderSelectionRequest) return;
+      _fillFormFromOrder(details);
+    } catch (error) {
+      if (!mounted || request != _orderSelectionRequest) return;
+      setState(() => _orderSearchError = error.toString());
+    } finally {
+      if (mounted && request == _orderSelectionRequest) {
+        setState(() => _loadingSelectedOrder = false);
+      }
+    }
+  }
+
+  /// Fills every field, including empty values, from the complete order.
   void _fillFormFromOrder(Map<String, dynamic> order) {
     // Fill origin CEP (formatted with dash)
-    final originZip = order['origin_zip_code']?.toString()?.trim();
-    if (originZip != null && originZip.isNotEmpty) {
-      _originController.text = _formatCep(originZip);
-    }
+    final originZip = order['origin_zip_code']?.toString().trim();
+    _originController.text = _formatCep(originZip ?? '');
 
     // Fill destination CEP (formatted with dash)
-    final destZip = order['destination_zip_code']?.toString()?.trim();
-    if (destZip != null && destZip.isNotEmpty) {
-      _destinationController.text = _formatCep(destZip);
-    }
+    final destZip = order['destination_zip_code']?.toString().trim();
+    _destinationController.text = _formatCep(destZip ?? '');
 
     // Fill dates (formatted for picker display)
-    final purchaseAt = order['purchase_at']?.toString()?.trim();
-    if (purchaseAt != null && purchaseAt.isNotEmpty) {
-      _purchaseAtController.text = _formatDateTime(purchaseAt);
-    }
+    final purchaseAt = order['purchase_at']?.toString().trim();
+    _purchaseAtController.text = _formatDateTime(purchaseAt);
 
-    final dispatchedAt = order['dispatched_at']?.toString()?.trim();
-    if (dispatchedAt != null && dispatchedAt.isNotEmpty) {
-      _dispatchedAtController.text = _formatDateTime(dispatchedAt);
-    }
+    final dispatchedAt = order['dispatched_at']?.toString().trim();
+    _dispatchedAtController.text = _formatDateTime(dispatchedAt);
 
-    final estimatedDeliveryAt = order['estimated_delivery_at']?.toString()?.trim();
-    if (estimatedDeliveryAt != null && estimatedDeliveryAt.isNotEmpty) {
-      _estimatedDeliveryAtController.text = _formatDateTime(estimatedDeliveryAt);
-    }
+    final estimatedDeliveryAt = order['estimated_delivery_at']?.toString().trim();
+    _estimatedDeliveryAtController.text = _formatDateTime(estimatedDeliveryAt);
 
     // Fill numeric fields
-    final weightG = order['total_weight_g'];
-    if (weightG != null) {
-      _weightController.text = (weightG is num ? (weightG / 1000).toString() : '');
-    }
+    final weightG = _parseNumber(order['total_weight_g']?.toString() ?? '');
+    _weightController.text = weightG == null ? '' : (weightG / 1000).toString();
 
     final volumeCm3 = order['total_volume_cm3'];
-    if (volumeCm3 != null) {
-      _volumeController.text = volumeCm3.toString();
-    }
+    _volumeController.text = volumeCm3?.toString() ?? '';
 
     final itemsCount = order['items_count'];
-    if (itemsCount != null) {
-      _itemsCountController.text = itemsCount.toString();
-    }
+    _itemsCountController.text = itemsCount?.toString() ?? '';
 
     final price = order['price'];
-    if (price != null) {
-      _declaredValueController.text = price.toString();
-    }
+    _declaredValueController.text = price?.toString() ?? '';
 
     final freightValue = order['freight_value'];
-    if (freightValue != null) {
-      _freightValueController.text = freightValue.toString();
-    }
+    _freightValueController.text = freightValue?.toString() ?? '';
 
     // Clear previous simulation results
     setState(() {
@@ -826,7 +828,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   /// Clears the selected order and returns to manual mode.
   void _clearSelectedOrder() {
+    _orderSelectionRequest++;
     setState(() {
+      _loadingSelectedOrder = false;
       _useImportedOrder = false;
       _selectedOrder = null;
       _orderSearchQuery = '';
@@ -962,7 +966,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             const Spacer(),
             Switch(
               value: _useImportedOrder,
-              onChanged: _isAnalyzing ? null : _toggleOrderSelectionMode,
+              onChanged: _isAnalyzing || _loadingSelectedOrder ? null : _toggleOrderSelectionMode,
             ),
           ],
         ),
@@ -1061,12 +1065,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
               setState(() => _orderSearchQuery = value);
               _searchOrders();
             },
-            enabled: !_isAnalyzing,
+            enabled: !_isAnalyzing && !_loadingSelectedOrder,
           ),
           if (_searchingOrders)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 12),
               child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            ),
+          if (_loadingSelectedOrder)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Row(
+                children: [
+                  SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                  SizedBox(width: 8),
+                  Text('Carregando dados do pedido...'),
+                ],
+              ),
             ),
           if (_orderSearchError != null && !_searchingOrders)
             Padding(
@@ -1095,7 +1110,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               return Material(
                 color: Colors.transparent,
                 child: InkWell(
-                  onTap: _isAnalyzing ? null : () => _fillFormFromOrder(order),
+                  onTap: _isAnalyzing || _loadingSelectedOrder ? null : () => _selectOrder(order),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     decoration: BoxDecoration(

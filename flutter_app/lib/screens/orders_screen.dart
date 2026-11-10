@@ -7,10 +7,9 @@
 /// - Detalhes do pedido com alteração de hub
 library;
 
-import 'dart:io' show File;
+import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../services/orders_api.dart';
 import '../services/shipment_csv_service.dart';
@@ -54,6 +53,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
   // Summary
   Map<String, dynamic>? _summary;
   bool _loadingSummary = true;
+  String? _summaryError;
 
   // CSV Import
   String? _csvContent;
@@ -76,6 +76,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
   static const int _perPage = 20;
   int _totalPages = 1;
   bool _loadingOrders = true;
+  int _ordersRequest = 0;
   String? _ordersError;
   _OrderFilter _filter = _OrderFilter.all;
 
@@ -123,6 +124,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
   }
 
   Future<void> _loadSummary() async {
+    setState(() {
+      _loadingSummary = true;
+      _summaryError = null;
+    });
     try {
       final summary = await _ordersApi.summary();
       if (mounted) {
@@ -134,7 +139,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _summary = {'total': 0, 'withHub': 0, 'withoutHub': 0, 'withPrediction': 0};
+          _summary = null;
+          _summaryError = e.toString();
           _loadingSummary = false;
         });
       }
@@ -142,9 +148,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
   }
 
   Future<void> _loadOrders({int? page}) async {
+    final request = ++_ordersRequest;
     final targetPage = page ?? _page;
     setState(() {
-      if (page == null) _loadingOrders = true;
+      _loadingOrders = true;
       _ordersError = null;
     });
     try {
@@ -154,7 +161,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
         query: _searchController.text.trim().isEmpty ? null : _searchController.text.trim(),
         source: 'operational',
       );
-      if (!mounted) return;
+      if (!mounted || request != _ordersRequest) return;
       setState(() {
         _orders = (result['data'] as List?)
                 ?.whereType<Map<String, dynamic>>()
@@ -166,7 +173,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
         _loadingOrders = false;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || request != _ordersRequest) return;
       setState(() {
         _ordersError = e.toString();
         _loadingOrders = false;
@@ -205,13 +212,24 @@ class _OrdersScreenState extends State<OrdersScreen> {
       _isLoading = true;
       _error = null;
       _status = 'Selecionando arquivo...';
+      _csvContent = null;
+      _csvFileName = null;
+      _csvRecordCount = 0;
+      _imported = null;
+      _ignored = null;
+      _failed = null;
+      _importedData = [];
+      _ignoredData = [];
+      _failedData = [];
     });
 
     try {
       final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['csv'],
+        withData: true,
       );
+      if (!mounted) return;
 
       if (result == null || result.files.isEmpty) {
         setState(() {
@@ -222,33 +240,25 @@ class _OrdersScreenState extends State<OrdersScreen> {
       }
 
       final file = result.files.single;
-      _csvFileName = file.name;
-
-      // Web-safe: use bytes directly instead of File path
-      String csv;
-      if (file.bytes != null) {
-        csv = String.fromCharCodes(file.bytes!);
-      } else if (file.path != null && !kIsWeb) {
-        csv = await File(file.path!).readAsString();
-      } else {
-        setState(() {
-          _isLoading = false;
-          _error = 'Não foi possível ler o arquivo no navegador.';
-          _status = 'Erro';
-        });
-        return;
+      final bytes = file.bytes;
+      if (bytes == null || bytes.isEmpty) {
+        throw const FormatException('O arquivo CSV está vazio ou não pôde ser lido.');
       }
-
-      // Count records (lines minus header)
-      final lines = csv.trim().split('\n');
-      _csvRecordCount = lines.length - 1;
+      final csv = utf8.decode(bytes).replaceFirst('\uFEFF', '');
+      if (csv.trim().isEmpty) {
+        throw const FormatException('O arquivo CSV está vazio.');
+      }
+      final records = ShipmentCsvService.parseCsv(csv);
 
       setState(() {
         _csvContent = csv;
+        _csvFileName = file.name;
+        _csvRecordCount = records.length - 1;
         _status = 'Arquivo "$_csvFileName" carregado ($_csvRecordCount registros). Clique em "Importar" para processar.';
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
         _error = 'Erro ao ler arquivo: $e';
@@ -273,7 +283,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
     try {
       // Validate locally first
-      ShipmentCsvService.parseShipments(_csvContent!);
+      ShipmentCsvService.parseShipments(_csvContent!, requireZipCodes: true);
       setState(() {
         _status = 'Enviando para o servidor...';
       });
@@ -336,6 +346,20 @@ class _OrdersScreenState extends State<OrdersScreen> {
     } catch (_) {
       return date;
     }
+  }
+
+  String _statusLabel(String? status) {
+    const labels = {
+      'created': 'Criado',
+      'approved': 'Aprovado',
+      'invoiced': 'Faturado',
+      'processing': 'Em preparação',
+      'shipped': 'Em transporte',
+      'delivered': 'Entregue',
+      'canceled': 'Cancelado',
+      'unavailable': 'Indisponível',
+    };
+    return labels[status] ?? 'Não informado';
   }
 
   @override
@@ -402,6 +426,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
           const SizedBox(height: 12),
           if (_loadingSummary)
             const Center(child: CircularProgressIndicator(strokeWidth: 2))
+          else if (_summaryError != null) ...[
+            Text('Erro ao carregar resumo: $_summaryError', style: const TextStyle(color: Colors.red)),
+            TextButton(onPressed: _loadSummary, child: const Text('Tentar carregar resumo novamente')),
+          ]
           else ...[
             Row(
               children: [
@@ -857,6 +885,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
           DataColumn(label: Text('ID Pedido')),
           DataColumn(label: Text('CEP Origem')),
           DataColumn(label: Text('CEP Destino')),
+          DataColumn(label: Text('Entrega prometida')),
+          DataColumn(label: Text('Status')),
           DataColumn(label: Text('Hub')),
           DataColumn(label: Text('Importado em')),
           DataColumn(label: Text('Ações')),
@@ -877,6 +907,14 @@ class _OrdersScreenState extends State<OrdersScreen> {
             )),
             DataCell(Text(
               order['destination_zip_code']?.toString() ?? '—',
+              style: const TextStyle(fontSize: 11),
+            )),
+            DataCell(Text(
+              _formatDate(order['estimated_delivery_at']?.toString()) ?? '—',
+              style: const TextStyle(fontSize: 11),
+            )),
+            DataCell(Text(
+              _statusLabel(order['status']?.toString()),
               style: const TextStyle(fontSize: 11),
             )),
             DataCell(Text(
@@ -942,6 +980,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   order['origin_zip_code']?.toString() ?? '—', primaryText),
               _detailRow('CEP de destino',
                   order['destination_zip_code']?.toString() ?? '—', primaryText),
+              _detailRow('Entrega prometida',
+                  _formatDate(order['estimated_delivery_at']?.toString()) ?? '—', primaryText),
+              _detailRow('Status', _statusLabel(order['status']?.toString()), primaryText),
               _detailRow('UF do vendedor',
                   order['seller_state']?.toString() ?? '—', primaryText),
               _detailRow('UF do cliente',
@@ -968,6 +1009,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   primaryText),
               _detailRow('Itens',
                   order['items_count']?.toString() ?? '—', primaryText),
+              _detailRow('Peso total (kg)',
+                  order['total_weight_g'] == null ? '—' : ((order['total_weight_g'] as num) / 1000).toString(), primaryText),
+              _detailRow('Volume total (cm³)',
+                  order['total_volume_cm3']?.toString() ?? '—', primaryText),
             ],
           ),
         ),

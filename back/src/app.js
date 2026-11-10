@@ -21,6 +21,7 @@ import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
+import { createPredictRouter } from './routes/predict.js';
 
 // Repositórios PostgreSQL (fallback para JSON)
 import {
@@ -52,6 +53,7 @@ const DEFAULT_HUBS_FILE = path.resolve(process.cwd(), 'data', 'hubs.json');
  * @param {string} opts.geolocationFile - Caminho para olist_geolocation_dataset.csv.
  * @param {string} opts.olistOrdersFile - Caminho para olist_orders_dataset.csv.
  * @param {string} opts.olistCustomersFile - Caminho para olist_customers_dataset.csv.
+ * @param {string} opts.predictReferenceFile - Caminho para a referência histórica BE-03.
  * @param {number} opts.batchConcurrency - Concorrência máxima para previsões em lote.
  * @param {number} opts.batchSize - Tamanho do lote para importação Olist.
  * @returns {import('express').Express} Aplicação Express configurada.
@@ -67,6 +69,7 @@ export async function createApp({
   geolocationFile = process.env.GEOLOCATION_FILE || path.resolve(process.cwd(), 'data', 'raw', 'olist_geolocation_dataset.csv'),
   olistOrdersFile = process.env.OLIST_ORDERS_FILE || path.resolve(process.cwd(), 'data', 'raw', 'olist_orders_dataset.csv'),
   olistCustomersFile = process.env.OLIST_CUSTOMERS_FILE || path.resolve(process.cwd(), 'data', 'raw', 'olist_customers_dataset.csv'),
+  predictReferenceFile,
   batchConcurrency = parseInt(process.env.BATCH_CONCURRENCY, 10) || 5,
   batchSize = parseInt(process.env.BATCH_SIZE, 10) || 200,
 } = {}) {
@@ -99,6 +102,7 @@ export async function createApp({
   });
   app.use('/api/v1/predictions/batch', express.json({ limit: '10mb', strict: true }));
   app.use(express.json({ limit: '2mb', strict: true }));
+  app.use('/predict', createPredictRouter({ referenceFile: predictReferenceFile }));
   // Fila de serialização: garante que mutações em orders.json sejam executadas sequencialmente,
   // evitando condições de corrida quando múltiplas requisições modificam o arquivo simultaneamente.
   let geolocationIndexPromise;
@@ -1086,6 +1090,9 @@ export async function createApp({
   app.locals.hubsFile = hubsFile;
   app.locals.predictionsFile = predictionsFile;
   app.locals.geolocationFile = geolocationFile;
+  app.locals.readPredictions = readPredictions;
+  app.locals.serializeOrderMutation = serializeOrderMutation;
+  app.locals.writeOrders = writeOrders;
 
   // Rotas modulares de geolocalização (substitui endpoint inline)
   const geolocationRouter = (await import('./routes/geolocation.js')).default;

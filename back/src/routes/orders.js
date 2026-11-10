@@ -14,6 +14,21 @@ import { getGeolocationIndex } from '../geolocation.js';
 import { haversineKm } from '../utils.js';
 
 const router = express.Router();
+const ORDER_STATUSES = new Set([
+  'created', 'approved', 'invoiced', 'processing', 'shipped',
+  'delivered', 'canceled', 'unavailable', 'unknown',
+]);
+
+function orderStatus(value) {
+  const status = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  return status || 'unknown';
+}
+
+function numericValue(value) {
+  if (value == null || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
 
 // Colunas obrigatórias no CSV operacional
 const REQUIRED_COLUMNS = [
@@ -75,10 +90,11 @@ async function readOrdersJson(req) {
   try {
     const content = await readFile(ordersFile, 'utf8');
     const parsed = JSON.parse(content);
-    if (!Array.isArray(parsed)) return [];
+    if (!Array.isArray(parsed)) throw new Error('Formato de orders.json inválido.');
     return parsed;
-  } catch {
-    return [];
+  } catch (error) {
+    if (error.code === 'ENOENT') return [];
+    throw error;
   }
 }
 
@@ -86,12 +102,7 @@ async function readOrdersJson(req) {
  * Grava o arquivo orders.json.
  */
 async function writeOrdersJson(req, orders) {
-  const { writeFile, mkdir } = await import('node:fs/promises');
-  const ordersFile = (req.app && req.app.locals && req.app.locals.ordersFile)
-    || process.env.ORDERS_FILE
-    || path.resolve(process.cwd(), 'data', 'orders.json');
-  await mkdir(path.dirname(ordersFile), { recursive: true });
-  await writeFile(ordersFile, JSON.stringify(orders, null, 2) + '\n', 'utf8');
+  await req.app.locals.writeOrders(orders);
 }
 
 /**
@@ -103,7 +114,7 @@ async function writeOrdersJson(req, orders) {
  * Body: { orders: [{ order_id, hub_id? }], default_hub_id?, source? }
  * Retorna: { data: [{ order_id, hub_id, source?, imported?, demo_hub_assigned?, hub_preserved? }], total }
  */
-router.post('/import', async (req, res) => {
+router.post('/import', (req, res) => req.app.locals.serializeOrderMutation(async () => {
   try {
     if (!req.is('application/json')) {
       return res.status(415).json({ error: 'UNSUPPORTED_MEDIA_TYPE', message: 'Envie application/json.' });
@@ -123,6 +134,9 @@ router.post('/import', async (req, res) => {
       }
       if (seen.has(id)) {
         return res.status(422).json({ error: 'DUPLICATE_ORDER_ID', message: `order_id duplicado: ${id}` });
+      }
+      if (!ORDER_STATUSES.has(orderStatus(item.status ?? item.order_status))) {
+        return res.status(422).json({ error: 'INVALID_STATUS', message: 'Status do pedido inválido.' });
       }
       seen.add(id);
     }
@@ -156,7 +170,7 @@ router.post('/import', async (req, res) => {
         }
       } else {
         const hubId = item.hub_id || default_hub_id || null;
-        const newOrder = { order_id: id, hub_id: hubId, createdAt: now, updatedAt: now };
+        const newOrder = { order_id: id, hub_id: hubId, status: orderStatus(item.status ?? item.order_status), createdAt: now, updatedAt: now };
         if (source !== undefined) newOrder.source = source;
         existingOrders.push(newOrder);
         existingMap.set(id, newOrder);
@@ -173,7 +187,7 @@ router.post('/import', async (req, res) => {
     console.error('Falha no import legacy:', error.message, error.stack);
     return res.status(500).json({ error: 'ORDER_STORAGE_ERROR', message: 'Não foi possível importar os pedidos.' });
   }
-});
+}));
 
 /**
  * POST /api/v1/orders/import-csv
@@ -183,7 +197,7 @@ router.post('/import', async (req, res) => {
  * Body: { csv: string }
  * Retorna: { imported, ignored, failed, data: [...] }
  */
-router.post('/import-csv', async (req, res) => {
+router.post('/import-csv', (req, res) => req.app.locals.serializeOrderMutation(async () => {
   if (!req.is('application/json')) {
     return res.status(415).json({ error: 'UNSUPPORTED_MEDIA_TYPE', message: 'Envie application/json.' });
   }
@@ -199,7 +213,10 @@ router.post('/import-csv', async (req, res) => {
     return res.status(422).json({ error: 'CSV_EMPTY', message: 'O CSV precisa ter cabeçalho e pelo menos um pedido.' });
   }
 
-  const headerRow = parseCsvRecord(lines[0]);
+  const commaHeader = parseCsvRecord(lines[0]);
+  const semicolonHeader = parseCsvRecord(lines[0], ';');
+  const delimiter = (semicolonHeader?.length ?? 0) > (commaHeader?.length ?? 0) ? ';' : ',';
+  const headerRow = parseCsvRecord(lines[0], delimiter);
   if (!headerRow) {
     return res.status(422).json({ error: 'CSV_MALFORMED', message: 'Cabeçalho CSV malformado.' });
   }
@@ -233,7 +250,7 @@ router.post('/import-csv', async (req, res) => {
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i];
     if (!line.trim()) continue;
-    const row = parseCsvRecord(line);
+    const row = parseCsvRecord(line, delimiter);
     if (!row) {
       failed.push({ line: i + 1, reason: 'Linha CSV malformada' });
       continue;
@@ -303,6 +320,12 @@ router.post('/import-csv', async (req, res) => {
       continue;
     }
 
+    const status = orderStatus(at(row, 'status') || at(row, 'order_status'));
+    if (!ORDER_STATUSES.has(status)) {
+      failed.push({ line: i + 1, order_id: orderId, reason: `status inválido: ${status}` });
+      continue;
+    }
+
     // Campos opcionais
     const distanceKmRaw = at(row, 'distance_km');
     const distanceKm = distanceKmRaw ? parseNonNegativeFloat(distanceKmRaw, 'distance_km') : null;
@@ -310,6 +333,11 @@ router.post('/import-csv', async (req, res) => {
     const totalWeightG = weightRaw ? parseNonNegativeFloat(weightRaw, 'total_weight_g') : null;
     const volumeRaw = at(row, 'total_volume_cm3');
     const totalVolumeCm3 = volumeRaw ? parseNonNegativeFloat(volumeRaw, 'total_volume_cm3') : null;
+    const invalidOptional = [distanceKm, totalWeightG, totalVolumeCm3].find((result) => result?.error);
+    if (invalidOptional) {
+      failed.push({ line: i + 1, order_id: orderId, reason: invalidOptional.error });
+      continue;
+    }
 
     // Montar objeto do pedido
     const orderData = {
@@ -328,6 +356,7 @@ router.post('/import-csv', async (req, res) => {
       distance_km: distanceKm ? distanceKm.value : null,
       total_weight_g: totalWeightG ? totalWeightG.value : null,
       total_volume_cm3: totalVolumeCm3 ? totalVolumeCm3.value : null,
+      status,
       source: 'operational',
     };
 
@@ -400,7 +429,7 @@ router.post('/import-csv', async (req, res) => {
     },
     total: imported.length + ignored.length + failed.length,
   });
-});
+}));
 
 /**
  * Associa hubs automaticamente aos pedidos importados.
@@ -552,19 +581,23 @@ router.get('/', async (req, res) => {
       purchase_at: order.purchase_at,
       dispatched_at: order.dispatched_at,
       estimated_delivery_at: order.estimated_delivery_at,
+      status: orderStatus(order.status ?? order.order_status),
       seller_state: order.seller_state,
       customer_state: order.customer_state,
-      items_count: order.items_count,
-      sellers_count: order.sellers_count,
-      price: order.price,
-      freight_value: order.freight_value,
+      items_count: numericValue(order.items_count),
+      sellers_count: numericValue(order.sellers_count),
+      price: numericValue(order.price),
+      freight_value: numericValue(order.freight_value),
+      distance_km: numericValue(order.distance_km),
+      total_weight_g: numericValue(order.total_weight_g),
+      total_volume_cm3: numericValue(order.total_volume_cm3),
       hub_id: order.hub_id || null,
       hub: order.hub_id && hubsMap.has(order.hub_id)
         ? { id: hubsMap.get(order.hub_id).id, code: hubsMap.get(order.hub_id).code, name: hubsMap.get(order.hub_id).name, city: hubsMap.get(order.hub_id).city, state: hubsMap.get(order.hub_id).state }
         : null,
       source: order.source || 'operational',
-      created_at: order.created_at,
-      updated_at: order.updated_at,
+      created_at: order.created_at ?? order.createdAt,
+      updated_at: order.updated_at ?? order.updatedAt,
     }));
 
     return res.json({
@@ -598,13 +631,17 @@ router.get('/summary', async (req, res) => {
     const total = operational.length;
     const withHub = operational.filter((o) => o.hub_id).length;
     const withoutHub = total - withHub;
-    // For JSON fallback, we can't easily count predictions; return 0
+    const orderIds = new Set(operational.map((order) => order.order_id));
+    const history = await req.app.locals.readPredictions();
+    const withPrediction = new Set(history
+      .filter((prediction) => orderIds.has(prediction.order_id))
+      .map((prediction) => prediction.order_id)).size;
     return res.json({
       data: {
         total,
         withHub,
         withoutHub,
-        withPrediction: 0,
+        withPrediction,
       },
     });
   } catch (error) {
@@ -643,20 +680,21 @@ router.get('/:orderId', async (req, res) => {
       purchase_at: order.purchase_at,
       dispatched_at: order.dispatched_at,
       estimated_delivery_at: order.estimated_delivery_at,
+      status: orderStatus(order.status ?? order.order_status),
       seller_state: order.seller_state,
       customer_state: order.customer_state,
-      items_count: order.items_count,
-      sellers_count: order.sellers_count,
-      price: order.price,
-      freight_value: order.freight_value,
-      distance_km: order.distance_km,
-      total_weight_g: order.total_weight_g,
-      total_volume_cm3: order.total_volume_cm3,
+      items_count: numericValue(order.items_count),
+      sellers_count: numericValue(order.sellers_count),
+      price: numericValue(order.price),
+      freight_value: numericValue(order.freight_value),
+      distance_km: numericValue(order.distance_km),
+      total_weight_g: numericValue(order.total_weight_g),
+      total_volume_cm3: numericValue(order.total_volume_cm3),
       hub_id: order.hub_id || null,
       hub: hub ? { id: hub.id, code: hub.code, name: hub.name, city: hub.city, state: hub.state } : null,
       source: order.source || 'operational',
-      created_at: order.created_at,
-      updated_at: order.updated_at,
+      created_at: order.created_at ?? order.createdAt,
+      updated_at: order.updated_at ?? order.updatedAt,
     }});
   } catch (error) {
     console.error('Falha ao ler pedido:', error.message);

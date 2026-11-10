@@ -41,7 +41,7 @@ export function haversineKm(lat1, lng1, lat2, lng2) {
 /**
  * Parser CSV minimalista.
  */
-export function parseCsvRecord(line) {
+export function parseCsvRecord(line, delimiter = ',') {
   const fields = [];
   let field = '';
   let quoted = false;
@@ -54,7 +54,7 @@ export function parseCsvRecord(line) {
       } else {
         quoted = !quoted;
       }
-    } else if (char === ',' && !quoted) {
+    } else if (char === delimiter && !quoted) {
       fields.push(field);
       field = '';
     } else {

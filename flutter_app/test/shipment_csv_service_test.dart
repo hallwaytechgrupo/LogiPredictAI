@@ -21,6 +21,17 @@ void main() {
         throwsFormatException,
       );
     });
+
+    test('detects semicolons and preserves decimal commas and quoted separators', () {
+      expect(
+        ShipmentCsvService.parseCsv('order_id;price;customer\r\n1;89,90;"São Paulo; SP"'),
+        [['order_id', 'price', 'customer'], ['1', '89,90', 'São Paulo; SP']],
+      );
+      expect(
+        ShipmentCsvService.parseCsv('order_id,customer\n1,"São Paulo; SP"'),
+        [['order_id', 'customer'], ['1', 'São Paulo; SP']],
+      );
+    });
   });
 
   group('ShipmentCsvService.parseShipments', () {
@@ -36,6 +47,16 @@ void main() {
       expect(parsed.shipments.single['id'], 'order-1');
       expect(parsed.shipments.single['seller_state'], 'SP');
       expect(parsed.duplicateCount, 1);
+    });
+
+    test('operational import requires the CEP columns', () {
+      expect(
+        () => ShipmentCsvService.parseShipments(
+          '${csv}order-1,SP,BA,2018-01-01,2018-01-02,2018-01-10,250,20,5,1,1,\n',
+          requireZipCodes: true,
+        ),
+        throwsFormatException,
+      );
     });
 
     test('allows an Olist promised date earlier than actual dispatch', () {

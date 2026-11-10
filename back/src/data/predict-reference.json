@@ -1,0 +1,231 @@
+{
+  "schema_version": 1,
+  "method": "historical_rules",
+  "source": "olist",
+  "synthetic": false,
+  "dataset_url": "https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce",
+  "source_files_sha256": {
+    "olist_orders_dataset.csv": "1dca8c9a7a8d34f0a8d0f7c272616d582e7f29d67a8c21ddd903152bf4ee6441",
+    "olist_customers_dataset.csv": "8a80cdbd27b49a1331f70547f46b376c15cfd172cbb4bc1b74071c86acea4ec8",
+    "olist_order_items_dataset.csv": "14e321c489a729b088f26f73262b506577e2b7fcb19cf04cd70fa6276d16ff65",
+    "olist_products_dataset.csv": "66f99d0261196b7f272c4ac58cf088688994a6200aa2841484defdaa42d3ade2",
+    "olist_sellers_dataset.csv": "c877ee451aadbec30ddc58542c12b87685703f9c8a2ba410fb3087336ac65d4a",
+    "olist_geolocation_dataset.csv": "3b7cf4f504ce3fbb3e63693f48d20ac4a4925619720e2ed46aba2f9801260876"
+  },
+  "observed_before": "2018-03-01",
+  "period": {
+    "dispatch_min": "2016-10-08 10:34:01",
+    "dispatch_max": "2018-02-27 22:58:45",
+    "delivery_min": "2016-10-11 13:46:32",
+    "delivery_max": "2018-02-28 23:58:37"
+  },
+  "quality": {
+    "raw_orders": 99441,
+    "eligible_orders": 96281,
+    "observed_orders_before_cutoff": 53620,
+    "excluded_incomplete_weight_or_distance": 293,
+    "reference_orders": 53327
+  },
+  "policy": {
+    "distance_bounds_km": [
+      250,
+      750,
+      1500
+    ],
+    "weight_bounds_g": [
+      1000,
+      5000
+    ],
+    "min_sample_size": 100,
+    "quantile_interpolation": "higher",
+    "high": "remaining_days < transit_days_p50",
+    "medium": "transit_days_p50 <= remaining_days < transit_days_p90",
+    "low": "remaining_days >= transit_days_p90"
+  },
+  "global": {
+    "sample_size": 53327,
+    "transit_days_p50": 8,
+    "transit_days_p90": 18,
+    "weight_g_min": 50.0,
+    "weight_g_max": 184400.0,
+    "distance_km_min": 0.0,
+    "distance_km_max": 4946.13977179737
+  },
+  "distance_groups": [
+    {
+      "distance_band": 0,
+      "sample_size": 14417,
+      "transit_days_p50": 3,
+      "transit_days_p90": 10,
+      "weight_g_min": 50.0,
+      "weight_g_max": 184400.0,
+      "distance_km_min": 0.0,
+      "distance_km_max": 249.99824216244625
+    },
+    {
+      "distance_band": 1,
+      "sample_size": 24108,
+      "transit_days_p50": 8,
+      "transit_days_p90": 16,
+      "weight_g_min": 50.0,
+      "weight_g_max": 154200.0,
+      "distance_km_min": 250.02734222941737,
+      "distance_km_max": 749.9626667308199
+    },
+    {
+      "distance_band": 2,
+      "sample_size": 9862,
+      "transit_days_p50": 10,
+      "transit_days_p90": 21,
+      "weight_g_min": 50.0,
+      "weight_g_max": 79200.0,
+      "distance_km_min": 750.0544091330096,
+      "distance_km_max": 1499.8719396546962
+    },
+    {
+      "distance_band": 3,
+      "sample_size": 4940,
+      "transit_days_p50": 14,
+      "transit_days_p90": 28,
+      "weight_g_min": 50.0,
+      "weight_g_max": 69900.0,
+      "distance_km_min": 1500.0586774233334,
+      "distance_km_max": 4946.13977179737
+    }
+  ],
+  "groups": [
+    {
+      "distance_band": 0,
+      "weight_band": 0,
+      "sample_size": 8602,
+      "transit_days_p50": 3,
+      "transit_days_p90": 9,
+      "weight_g_min": 50.0,
+      "weight_g_max": 1000.0,
+      "distance_km_min": 0.0,
+      "distance_km_max": 249.87691754355774
+    },
+    {
+      "distance_band": 0,
+      "weight_band": 1,
+      "sample_size": 3800,
+      "transit_days_p50": 4,
+      "transit_days_p90": 10,
+      "weight_g_min": 1025.0,
+      "weight_g_max": 5000.0,
+      "distance_km_min": 0.0,
+      "distance_km_max": 249.99824216244625
+    },
+    {
+      "distance_band": 0,
+      "weight_band": 2,
+      "sample_size": 2015,
+      "transit_days_p50": 4,
+      "transit_days_p90": 12,
+      "weight_g_min": 5050.0,
+      "weight_g_max": 184400.0,
+      "distance_km_min": 0.0,
+      "distance_km_max": 249.92706752363202
+    },
+    {
+      "distance_band": 1,
+      "weight_band": 0,
+      "sample_size": 13035,
+      "transit_days_p50": 8,
+      "transit_days_p90": 16,
+      "weight_g_min": 50.0,
+      "weight_g_max": 1000.0,
+      "distance_km_min": 250.02734222941737,
+      "distance_km_max": 749.9604163079433
+    },
+    {
+      "distance_band": 1,
+      "weight_band": 1,
+      "sample_size": 7684,
+      "transit_days_p50": 8,
+      "transit_days_p90": 17,
+      "weight_g_min": 1008.0,
+      "weight_g_max": 5000.0,
+      "distance_km_min": 250.06101713651645,
+      "distance_km_max": 749.9626667308199
+    },
+    {
+      "distance_band": 1,
+      "weight_band": 2,
+      "sample_size": 3389,
+      "transit_days_p50": 8,
+      "transit_days_p90": 18,
+      "weight_g_min": 5025.0,
+      "weight_g_max": 154200.0,
+      "distance_km_min": 250.1625837827663,
+      "distance_km_max": 749.6514136490465
+    },
+    {
+      "distance_band": 2,
+      "weight_band": 0,
+      "sample_size": 5480,
+      "transit_days_p50": 10,
+      "transit_days_p90": 20,
+      "weight_g_min": 50.0,
+      "weight_g_max": 1000.0,
+      "distance_km_min": 750.0715419986223,
+      "distance_km_max": 1499.8719396546962
+    },
+    {
+      "distance_band": 2,
+      "weight_band": 1,
+      "sample_size": 3052,
+      "transit_days_p50": 10,
+      "transit_days_p90": 20,
+      "weight_g_min": 1003.0,
+      "weight_g_max": 5000.0,
+      "distance_km_min": 750.0544091330096,
+      "distance_km_max": 1499.8014090008028
+    },
+    {
+      "distance_band": 2,
+      "weight_band": 2,
+      "sample_size": 1330,
+      "transit_days_p50": 11,
+      "transit_days_p90": 22,
+      "weight_g_min": 5050.0,
+      "weight_g_max": 79200.0,
+      "distance_km_min": 750.4661906260267,
+      "distance_km_max": 1498.3425885826343
+    },
+    {
+      "distance_band": 3,
+      "weight_band": 0,
+      "sample_size": 2846,
+      "transit_days_p50": 14,
+      "transit_days_p90": 28,
+      "weight_g_min": 50.0,
+      "weight_g_max": 1000.0,
+      "distance_km_min": 1500.0586774233334,
+      "distance_km_max": 4791.669314801695
+    },
+    {
+      "distance_band": 3,
+      "weight_band": 1,
+      "sample_size": 1443,
+      "transit_days_p50": 14,
+      "transit_days_p90": 28,
+      "weight_g_min": 1017.0,
+      "weight_g_max": 5000.0,
+      "distance_km_min": 1500.5774386605021,
+      "distance_km_max": 4946.13977179737
+    },
+    {
+      "distance_band": 3,
+      "weight_band": 2,
+      "sample_size": 651,
+      "transit_days_p50": 15,
+      "transit_days_p90": 29,
+      "weight_g_min": 5020.0,
+      "weight_g_max": 69900.0,
+      "distance_km_min": 1500.8103993962259,
+      "distance_km_max": 3130.5075927711728
+    }
+  ],
+  "rules_version": "be03-olist-v1-380e3dfdaf83"
+}

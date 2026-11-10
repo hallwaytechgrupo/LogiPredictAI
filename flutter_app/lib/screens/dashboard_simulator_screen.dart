@@ -191,7 +191,7 @@ extension _DashboardSimulatorScreen on _DashboardScreenState {
             }),
             const SizedBox(height: 18),
             FilledButton.icon(
-              onPressed: _isAnalyzing ? null : _analyze,
+              onPressed: _isAnalyzing || _loadingSelectedOrder ? null : _analyze,
               icon: _isAnalyzing
                   ? const SizedBox(
                       width: 18,

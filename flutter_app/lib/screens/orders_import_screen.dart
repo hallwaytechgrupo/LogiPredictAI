@@ -3,7 +3,7 @@
 /// Substitui a tela de simulação Olist em lote.
 library;
 
-import 'dart:io';
+import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -36,15 +36,24 @@ class _OrdersImportScreenState extends State<OrdersImportScreen> {
       _isLoading = true;
       _error = null;
       _status = 'Selecionando arquivo...';
+      _csvContent = null;
+      _imported = null;
+      _ignored = null;
+      _failed = null;
+      _importedData = [];
+      _ignoredData = [];
+      _failedData = [];
     });
 
     try {
       final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['csv'],
+        withData: true,
       );
+      if (!mounted) return;
 
-      if (result == null || result.files.single.path == null) {
+      if (result == null || result.files.isEmpty) {
         setState(() {
           _isLoading = false;
           _status = 'Nenhum arquivo selecionado.';
@@ -52,13 +61,21 @@ class _OrdersImportScreenState extends State<OrdersImportScreen> {
         return;
       }
 
-      final csv = await File(result.files.single.path!).readAsString();
+      final bytes = result.files.single.bytes;
+      if (bytes == null || bytes.isEmpty) {
+        throw const FormatException('O arquivo CSV está vazio ou não pôde ser lido.');
+      }
+      final csv = utf8.decode(bytes).replaceFirst('\uFEFF', '');
+      if (csv.trim().isEmpty) {
+        throw const FormatException('O arquivo CSV está vazio.');
+      }
       setState(() {
         _csvContent = csv;
         _status = 'Arquivo carregado. Clique em "Importar" para processar.';
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
         _error = 'Erro ao ler arquivo: $e';
@@ -83,7 +100,7 @@ class _OrdersImportScreenState extends State<OrdersImportScreen> {
 
     try {
       // Validar localmente primeiro
-      ShipmentCsvService.parseShipments(_csvContent!);
+      ShipmentCsvService.parseShipments(_csvContent!, requireZipCodes: true);
       setState(() {
         _status = 'Enviando para o servidor...';
       });
