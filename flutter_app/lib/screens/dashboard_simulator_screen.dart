@@ -903,9 +903,8 @@ extension _DashboardSimulatorScreen on _DashboardScreenState {
                 ),
                 children: [
                   TileLayer(
-                    urlTemplate: _isDark
-                        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-                        : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    urlTemplate:
+                        'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
                   ),
                   MarkerLayer(markers: markers),
                   if (polylines.isNotEmpty)
