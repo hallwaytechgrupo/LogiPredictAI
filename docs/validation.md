@@ -1,5 +1,22 @@
 # Validação da entrega
 
+## Leaflet e pedido futuro — 22/11/2026
+
+- Python: 56 testes aprovados, incluindo os pesos preservados, contrato de
+  pedido futuro, vendedor opcional, validação de CEP e ausência de desfechos futuros.
+- Node: 159 casos, 158 aprovados e 1 ignorado; cache invalidado após alteração
+  do CSV e repasse dos novos endpoints verificados.
+- Flutter: 67 testes aprovados, incluindo formulário sem pedido importado,
+  conversão kg/g, erro/retry e alternância de vistas mantendo a análise.
+- Build Web em produção compilado; análise dos novos módulos Dart e Ruff
+  dos módulos Python alterados sem problemas.
+- Verificação local no navegador: abertura das duas vistas, zoom e arraste do
+  histórico e previsão de compra em 23/12; somente um iframe/mapa ativo.
+- PostgreSQL, Docker e Mobile continuam fora da homologação desta etapa.
+
+O histórico e a busca de CEP usam cache; a busca de locais não inicializa o
+modelo, e a previsão de compra nova não carrega a avaliação dos 19.258 pedidos.
+
 ## Mapa integrado — 22/11/2026
 
 - Python: 41 testes aprovados, incluindo reprodução integral das 19.258

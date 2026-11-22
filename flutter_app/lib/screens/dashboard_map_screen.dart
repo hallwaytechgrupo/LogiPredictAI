@@ -1,25 +1,12 @@
 part of 'dashboard_screen.dart';
 
-/// Delegates to the standalone [LogisticsHeatMap] widget so that the
-/// FlutterMap is NOT recreated on every dashboard `setState`.
-/// This prevents the expensive hit-testing and pointer-event processing
-/// cascade that freezes the app when the user changes the browser zoom.
+/// O workspace mantém os campos e desmonta o mapa que não estiver visível.
 extension _DashboardMapScreen on _DashboardScreenState {
   Widget _buildMapPage() {
-    return DefaultTabController(
-        length: 2,
-        child: Column(children: [
-          const TabBar(tabs: [
-            Tab(text: 'Pesquisa e simulação'),
-            Tab(text: 'Histórico por região')
-          ]),
-          Expanded(
-              child: TabBarView(children: [
-            if (_mapOpened)
-              const PredictionMapScreen()
-            else
-              const SizedBox.shrink(),
-            LogisticsHeatMap(
+    return MapWorkspaceScreen(
+        active: _tab == 1,
+        historyBuilder: (active) => LogisticsHeatMap(
+              active: active,
               regionOrderData: _regionOrderData,
               mapHubs: _mapHubs,
               showHubLayer: _showHubLayer,
@@ -32,8 +19,6 @@ extension _DashboardMapScreen on _DashboardScreenState {
                 _loadMapHubs();
               },
               onToggleHubLayer: _setMapHubLayer,
-            ),
-          ])),
-        ]));
+            ));
   }
 }

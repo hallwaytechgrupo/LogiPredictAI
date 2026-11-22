@@ -22,6 +22,9 @@ class MapScenariosApi {
   Future<Map<String, dynamic>> simulate(Map<String, dynamic> shipment) =>
       _request('simulate', body: shipment);
 
+  Future<Map<String, dynamic>> forecast(Map<String, dynamic> shipment) =>
+      _request('forecast', body: shipment);
+
   Future<Map<String, dynamic>> _request(String resource,
       {Map<String, String> query = const {},
       Map<String, dynamic>? body}) async {
@@ -67,6 +70,18 @@ class MapScenariosApi {
             data['metrics'] is! Map)) {
       throw Exception(
           'O serviço do mapa retornou um catálogo incompleto. Atualize o backend e tente novamente.');
+    }
+    if (resource == 'forecast' &&
+        (data['result'] is! Map ||
+            data['shipment'] is! Map ||
+            data['calendar'] is! Map ||
+            data['origin'] is! Map ||
+            data['destination'] is! Map ||
+            data['alternatives'] is! List ||
+            data['suggestions'] is! List ||
+            data['warnings'] is! List)) {
+      throw Exception(
+          'O serviço retornou uma análise incompleta. Tente calcular novamente.');
     }
     return data;
   }

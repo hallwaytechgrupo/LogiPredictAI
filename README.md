@@ -15,9 +15,9 @@ A `machineLearning` mantém a pesquisa e a publicação dos modelos.
 ## Recursos atuais
 
 - Simulador logístico, importação de pedidos, indicadores e cadastro de hubs.
-- Pesquisa no mapa por data de compra, origem, destino, região, CEP, ID e risco.
+- Simulação de compra futura com datas, origem, destino, CEP e dados do pacote.
 - Comparação de cenários com o **modelo 564 + filtro CatBoost**, preservado.
-- Mapa de regiões e pontos locais disponível sem internet; ruas são opcionais.
+- Leaflet no navegador, com ruas/cidades, histórico por região e apenas um mapa ativo.
 - Validações, estados de carregamento/erro e testes nas três camadas.
 - PostgreSQL com fallback JSON nos fluxos operacionais existentes.
 
@@ -58,12 +58,12 @@ npm.cmd start
 
 ```powershell
 cd flutter_app
-flutter run -d chrome --web-port 8080 --dart-define=API_BASE_URL=http://127.0.0.1:3001
+flutter run -d chrome --release --web-port 8080 --dart-define=API_BASE_URL=http://127.0.0.1:3001
 ```
 
 Abra [a aplicação local](http://localhost:8080) e entre em **Mapa de Calor
-Logístico → Pesquisa e simulação**. O período inicial é de 2018, pois corresponde
-à amostra histórica disponível. **Histórico por região** preserva o mapa anterior.
+Logístico → Simular nova entrega**. O formulário à esquerda recebe uma compra
+planejada, sem selecionar um pedido antigo. **Histórico por região** consulta as taxas observadas.
 Os pesos e o catálogo estão versionados; o novo mapa não exige retreinamento,
 download dos CSVs originais ou PostgreSQL. Encerre instâncias anteriores antes
 de reiniciar nas mesmas portas.

@@ -8,9 +8,11 @@ import hashlib
 import json
 import logging
 import sys
+import unicodedata
 from datetime import date, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
+from threading import Lock
 from typing import Annotated, Literal
 
 import joblib
@@ -32,6 +34,15 @@ REGIONS = {
 }
 router = APIRouter(prefix="/map", tags=["Mapa e cenários"])
 logger = logging.getLogger(__name__)
+_model_lock = Lock()
+_catalog_lock = Lock()
+MODEL_LIMITATIONS = [
+    "Score não calibrado: não é uma porcentagem de chance de atraso.",
+    "Base histórica Olist de 2016–2018; não representa a operação atual.",
+    "Resultado retrospectivo exploratório; o período final foi consultado em pesquisas anteriores.",
+    "564 atrasos encontrados incluem 130 já vencidos no despacho e 434 antecipados.",
+    "O modelo não usa feriados explicitamente nem identifica causas de atraso.",
+]
 
 
 def verify(root, manifest):
@@ -55,33 +66,32 @@ class MapEngine:
             (FINAL / "artefatos/integridade.json").read_text(encoding="utf-8")
         )
         verify(FINAL, integrity)
-        catalog_manifest = json.loads(
-            (CATALOG / "manifest.json").read_text(encoding="utf-8")
-        )
-        verify(CATALOG, catalog_manifest["sha256"])
         self.bundle = joblib.load(FINAL / "artefatos" / f"{NAME}.joblib")
         self.pipeline, self.metadata = self.bundle["pipeline"], self.bundle["metadata"]
-        self.rows = pd.read_csv(
+        self._rows = None
+        self._rows_lock = Lock()
+        self.locations, self.sellers, self.location_terms = geographic_catalog()
+
+    @property
+    def rows(self):
+        # A avaliação retrospectiva só é carregada pelas rotas de pesquisa antiga.
+        with self._rows_lock:
+            if self._rows is None:
+                self._rows = self._load_rows()
+            return self._rows
+
+    def _load_rows(self):
+        rows = pd.read_csv(
             FINAL / "dados/pedidos_avaliacao.csv.gz",
             dtype={"origin_prefix5": str, "destination_prefix5": str},
         )
         predictions = pd.read_csv(FINAL / "dados/previsoes_564.csv")
-        if not self.rows.order_id.equals(predictions.order_id):
+        if not rows.order_id.equals(predictions.order_id):
             raise ValueError("O relatório de previsões não corresponde à base final.")
-        self.rows["score"] = predictions.score
-        self.rows["base_score"] = self.reference_score(
-            self.pipeline.reference, self.rows
-        )
-        self.rows["risk"] = [
-            self.band(b, p) for b, p in zip(self.rows.base_score, self.rows.score)
-        ]
-        self.rows = self.rows.set_index("order_id", drop=False).rename_axis(None)
-        self.locations = pd.read_csv(
-            CATALOG / "locations.csv.gz", dtype={"prefix5": str}
-        ).set_index("prefix5", drop=False)
-        self.sellers = pd.read_csv(
-            CATALOG / "sellers.csv.gz", dtype={"prefix5": str}
-        ).set_index("seller_id", drop=False)
+        rows["score"] = predictions.score
+        rows["base_score"] = self.reference_score(self.pipeline.reference, rows)
+        rows["risk"] = [self.band(b, p) for b, p in zip(rows.base_score, rows.score)]
+        return rows.set_index("order_id", drop=False).rename_axis(None)
 
     def band(self, base, score):
         if score >= self.metadata["threshold"]:
@@ -171,8 +181,33 @@ class MapEngine:
 
 
 @lru_cache(maxsize=1)
-def engine():
+def _load_engine():
     return MapEngine()
+
+
+def engine():
+    # Duas requisições simultâneas não devem carregar duas cópias dos pesos.
+    with _model_lock:
+        return _load_engine()
+
+
+@lru_cache(maxsize=1)
+def _load_geographic_catalog():
+    manifest = json.loads((CATALOG / "manifest.json").read_text(encoding="utf-8"))
+    verify(CATALOG, manifest["sha256"])
+    places = pd.read_csv(
+        CATALOG / "locations.csv.gz", dtype={"prefix5": str}
+    ).set_index("prefix5", drop=False)
+    sellers = pd.read_csv(CATALOG / "sellers.csv.gz", dtype={"prefix5": str}).set_index(
+        "seller_id", drop=False
+    )
+    terms = places[["prefix5", "city", "state"]].agg(" ".join, axis=1).map(search_text)
+    return places, sellers, terms
+
+
+def geographic_catalog():
+    with _catalog_lock:
+        return _load_geographic_catalog()
 
 
 def ready():
@@ -205,13 +240,7 @@ def catalog():
             "Médio": "A primeira etapa alertou, mas o filtro de contexto retirou o alerta.",
             "Alto": "O modelo final manteve o alerta de atraso.",
         },
-        "limitations": [
-            "Score não calibrado: não é uma porcentagem de chance de atraso.",
-            "Base histórica Olist de 2016–2018; não representa a operação atual.",
-            "Resultado retrospectivo exploratório; o período final foi consultado em pesquisas anteriores.",
-            "564 atrasos encontrados incluem 130 já vencidos no despacho e 434 antecipados.",
-            "O modelo não usa feriados explicitamente nem identifica causas de atraso.",
-        ],
+        "limitations": MODEL_LIMITATIONS,
     }
 
 
@@ -302,6 +331,34 @@ def sellers(q: Annotated[str, Query(max_length=128)] = ""):
     return {"data": rows.to_dict(orient="records")}
 
 
+def search_text(value):
+    return "".join(
+        c
+        for c in unicodedata.normalize("NFKD", value.casefold())
+        if not unicodedata.combining(c)
+    )
+
+
+@router.get("/locations")
+def locations(q: Annotated[str, Query(min_length=2, max_length=128)]):
+    # A busca de CEPs não carrega o modelo nem calcula previsões de pedidos antigos.
+    try:
+        places, _, terms = geographic_catalog()
+    except (OSError, ValueError):
+        raise HTTPException(503, "Catálogo de CEPs indisponível.") from None
+    term = search_text(q.strip())
+    digits = term.replace("-", "")
+    if digits.isdigit():
+        selected = places[places.prefix5.str.startswith(digits[:5])]
+    else:
+        # Todos os termos devem aparecer: permite, por exemplo, "sao paulo SP".
+        mask = pd.Series(True, index=places.index)
+        for word in term.split():
+            mask &= terms.str.contains(word, regex=False)
+        selected = places[mask]
+    return {"data": selected.head(25).to_dict(orient="records")}
+
+
 def holiday(day):
     # Subconjunto explícito: apenas feriados nacionais de data fixa.
     # Consciência Negra tornou-se nacional após a Lei 14.759/2023.
@@ -368,6 +425,100 @@ class Scenario(BaseModel):
     ) = None
 
 
+class FutureScenario(BaseModel):
+    """Entrada completa de um pedido hipotético, sem reutilizar um pedido antigo."""
+
+    model_config = ConfigDict(extra="forbid")
+    purchase_at: datetime
+    dispatched_at: datetime
+    estimated_delivery_at: datetime
+    origin_prefix5: Annotated[str, Field(pattern=r"^\d{5}$")]
+    destination_prefix5: Annotated[str, Field(pattern=r"^\d{5}$")]
+    seller_id: Annotated[str, Field(min_length=1, max_length=128)] | None = None
+    total_weight_g: Annotated[
+        float, Field(strict=True, ge=0, le=100000000, allow_inf_nan=False)
+    ]
+    total_volume_cm3: (
+        Annotated[float, Field(strict=True, ge=0, le=1000000000, allow_inf_nan=False)]
+        | None
+    ) = None
+    items_count: Annotated[int, Field(strict=True, ge=1, le=10000)] = 1
+    price: Annotated[float, Field(strict=True, ge=0, le=100000000, allow_inf_nan=False)]
+    freight_value: Annotated[
+        float, Field(strict=True, ge=0, le=100000000, allow_inf_nan=False)
+    ]
+
+
+@router.post("/forecast")
+def forecast(request: FutureScenario):
+    e = ready()
+    origin, destination = (
+        e.place(request.origin_prefix5),
+        e.place(request.destination_prefix5),
+    )
+    if origin is None or destination is None:
+        raise HTTPException(
+            422,
+            "Origem ou destino sem coordenadas na base. Pesquise e selecione um CEP disponível.",
+        )
+    if request.seller_id is not None:
+        if request.seller_id not in e.sellers.index:
+            raise HTTPException(
+                422,
+                "Vendedor não encontrado; deixe o campo vazio se não conhece o identificador.",
+            )
+        seller = e.sellers.loc[request.seller_id]
+        if seller.prefix5 != request.origin_prefix5:
+            raise HTTPException(
+                422, "O vendedor informado não corresponde ao CEP de origem."
+            )
+        origin["state"] = seller.state
+    from logipredict_final.data import haversine
+
+    values = request.model_dump()
+    values.update(
+        seller_state=origin["state"],
+        customer_state=destination["state"],
+        sellers_count=1,
+        distance_km=float(
+            haversine(
+                origin["latitude"],
+                origin["longitude"],
+                destination["latitude"],
+                destination["longitude"],
+            )
+        ),
+    )
+    raw = validated_shipment(e, values)
+    result = analyze(e, raw)
+    result.update(
+        scenario_type="future_order",
+        history_last_delivery=str(e.pipeline.history.events.delivered_at.max()),
+    )
+    if request.seller_id is None:
+        result["warnings"].append(
+            "Sem identificador do vendedor: o modelo usa histórico da rota e da região, sem atribuir o histórico de outro vendedor."
+        )
+    return result
+
+
+def validated_shipment(e, values):
+    try:
+        return e.contract.model_validate(values).model_dump()
+    except ValidationError as exc:
+        raise HTTPException(
+            422,
+            [
+                {
+                    "loc": ["body", *item["loc"]],
+                    "msg": item["msg"],
+                    "type": item["type"],
+                }
+                for item in exc.errors()
+            ],
+        ) from None
+
+
 @router.post("/simulate")
 def simulate(request: Scenario):
     e = ready()
@@ -415,20 +566,15 @@ def simulate(request: Scenario):
             ),
         )
     raw.update(changes)
-    try:
-        raw = e.contract.model_validate(raw).model_dump()
-    except ValidationError as exc:
-        raise HTTPException(
-            422,
-            [
-                {
-                    "loc": ["body", *item["loc"]],
-                    "msg": item["msg"],
-                    "type": item["type"],
-                }
-                for item in exc.errors()
-            ],
-        ) from None
+    raw = validated_shipment(e, raw)
+    return {
+        **analyze(e, raw),
+        "order_id": request.order_id,
+        "scenario_changed": raw != original,
+    }
+
+
+def analyze(e, raw):
     start, dispatch, end = (
         raw[k] for k in ["purchase_at", "dispatched_at", "estimated_delivery_at"]
     )
@@ -451,6 +597,11 @@ def simulate(request: Scenario):
         if candidate["dispatched_at"] >= max(start, trained_asof):
             variants.append((label, candidate))
     next_work = dispatch
+    for offset in range(3):
+        possible = dispatch + timedelta(days=offset)
+        if holiday(possible.date()):
+            next_work = possible
+            break
     while holiday(next_work.date()) or next_work.weekday() >= 5:
         next_work += timedelta(days=1)
     if next_work != dispatch and next_work != dispatch + timedelta(days=1):
@@ -479,6 +630,10 @@ def simulate(request: Scenario):
         for (label, v), result in zip(variants[1:], evaluated[1:])
     ]
     suggestions = []
+    if calendar_context(raw)["fixed_national_holidays"]:
+        suggestions.append(
+            "Há feriado nacional no intervalo. Confirme o funcionamento do vendedor e do transporte antes de combinar as datas."
+        )
     if base["already_overdue"]:
         suggestions.append(
             "O prazo já estava vencido no despacho informado; priorize o contato com o cliente."
@@ -493,7 +648,7 @@ def simulate(request: Scenario):
         suggestions.append(
             "As alternativas testadas não reduziram a faixa de risco. Acompanhe o pedido e confirme a capacidade de entrega."
         )
-    warnings = list(catalog()["limitations"])
+    warnings = list(MODEL_LIMITATIONS)
     if dispatch > e.pipeline.history.events.delivered_at.max().to_pydatetime():
         warnings.append(
             "Data posterior à base Olist: não há histórico recente para essa operação; cenário apenas exploratório."
@@ -512,8 +667,6 @@ def simulate(request: Scenario):
         "model_version": e.metadata["version"],
         "source": "olist",
         "synthetic": False,
-        "order_id": request.order_id,
-        "scenario_changed": raw != original,
         "shipment": raw,
         "origin": e.place(raw["origin_prefix5"], raw["seller_state"]),
         "destination": e.place(raw["destination_prefix5"], raw["customer_state"]),

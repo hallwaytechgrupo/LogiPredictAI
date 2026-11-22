@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Mapa Leaflet LogiPredict</title>
+  <link rel="stylesheet" href="vendor/leaflet.css">
+  <style>
+    html,body,#map{height:100%;width:100%;margin:0;font:13px system-ui,sans-serif;background:#e9eef3}
+    #status{position:absolute;bottom:25px;left:12px;z-index:900;background:#ffffffed;padding:7px 11px;border-radius:8px;color:#475569;box-shadow:0 1px 6px #0002;max-width:75%;pointer-events:none}
+    .leaflet-container{font:12px system-ui,sans-serif}
+    .location-pin{border:3px solid white;box-shadow:0 2px 9px #0005;border-radius:50%;color:white;font-weight:800;text-align:center;line-height:30px;font-size:15px}
+    .region-label{background:white;border:1px solid #cbd5e1;border-radius:7px;padding:5px 8px;box-shadow:0 1px 5px #0002;white-space:nowrap;font-size:11px}
+    .leaflet-popup-content{line-height:1.6;max-height:270px;overflow:auto}
+    .map-tools{background:white;border:0;border-radius:5px;padding:10px 12px;cursor:pointer;color:#334155;font:600 12px system-ui}
+  </style>
+</head>
+<body>
+  <div id="map" role="application" aria-label="Mapa interativo de entregas"></div>
+  <output id="status" aria-live="polite">Carregando mapa…</output>
+  <script src="vendor/leaflet.js"></script>
+  <script src="leaflet-map.js"></script>
+</body>
+</html>

@@ -8,9 +8,9 @@ A branch `codex/mapa-simulacoes-final` combina a aplicação com os dois noteboo
 finais, seus pesos e o novo mapa usando o modelo 564 + filtro.
 
 O sistema já demonstra o fluxo de entrada → validação → API → modelo real →
-classificação → mapa → comparação de cenários. O mapa histórico anterior está
-preservado. As rotas antigas continuam utilizando seu contrato e modelo original;
-o novo fluxo de pesquisa usa explicitamente `modelo_564_filter`.
+classificação → mapa → comparação de cenários. Os mapas Web usam Leaflet, com
+formulário lateral para compras futuras e histórico regional em uma vista separada.
+As rotas antigas mantêm seu contrato/modelo; a simulação nova usa `modelo_564_filter`.
 
 O produto é uma demonstração acadêmica com dados reais históricos. A quantidade
 de falsos alertas, a falta de calibração e o reuso exploratório do benchmark
@@ -40,18 +40,18 @@ devem ser adicionados com `git add .`.
    do consumidor. A plataforma ajuda a priorizar acompanhamento no despacho.
 2. **Dados, 40 s:** seis tabelas públicas da Olist, integração por pedido,
    histórico anterior à previsão, vendedor real, prefixos de CEP e prazos.
-3. **Demonstração, 2 min:** abrir o mapa, filtrar uma região/período, selecionar
-   um pedido, simular e comparar datas. Mostrar origem/destino, faixa de risco,
-   histórico disponível e uma comparação que realmente altere a faixa.
+3. **Demonstração, 2 min:** abrir **Simular nova entrega**, preencher o exemplo
+   de compra em 23/12 e ajustar os campos. Mostrar origem/destino, faixa de risco,
+   calendário e alternativas. Depois consultar o histórico por região.
 4. **Resultados, 1 min:** explicar 564 encontrados, 140 perdidos e 4.358 falsos
    alertas. Diferenciar recall de precisão, e antecipações de prazos já vencidos.
 5. **Limites e evolução, 40 s:** histórico 2016–2018, scores não calibrados e
    necessidade de teste novo. Feriado aparece como contexto, sem alegar que o
    modelo aprendeu um efeito que não foi medido.
 
-Use os três pedidos de exemplo documentados em [Mapa e demonstração](mapa-e-demonstracao.md).
-São exemplos escolhidos para explicar o fluxo; não são uma amostra para medir
-desempenho. As métricas apresentadas vêm dos 19.258 pedidos completos.
+Use **Exemplo: compra em 23/12**, documentado em [Mapa e demonstração](mapa-e-demonstracao.md).
+É um cenário hipotético para explicar o fluxo, sem resultado real de entrega.
+As métricas do treinamento vêm dos 19.258 pedidos históricos da avaliação.
 
 ## Respostas simples para o público
 

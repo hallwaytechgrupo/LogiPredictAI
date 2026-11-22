@@ -1,900 +1,172 @@
-/// Mapa de pedidos reais, classificação preservada e comparação de cenários.
+/// Planejamento de um pedido novo, com formulário lateral e mapa Leaflet.
 library;
 
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:flutter_map_geojson2/flutter_map_geojson2.dart';
-import 'package:latlong2/latlong.dart';
 import '../services/map_scenarios_api.dart';
+import '../widgets/leaflet_map.dart';
 
 class PredictionMapScreen extends StatefulWidget {
-  const PredictionMapScreen({super.key, this.api});
+  const PredictionMapScreen({super.key, this.api, this.active = true});
   final MapScenariosApi? api;
-
+  final bool active;
   @override
   State<PredictionMapScreen> createState() => _PredictionMapScreenState();
 }
 
-class _PredictionMapScreenState extends State<PredictionMapScreen>
-    with AutomaticKeepAliveClientMixin {
-  @override
-  bool get wantKeepAlive => true;
+class _PredictionMapScreenState extends State<PredictionMapScreen> {
   late final MapScenariosApi _api = widget.api ?? MapScenariosApi();
-  final _map = MapController();
   final _form = GlobalKey<FormState>();
-  final _scenarioAnchor = GlobalKey();
-  final _resultAnchor = GlobalKey();
-  final _start = TextEditingController();
-  final _end = TextEditingController();
-  final _originPrefix = TextEditingController();
-  final _destinationPrefix = TextEditingController();
-  final _id = TextEditingController();
   final _purchase = TextEditingController();
   final _dispatch = TextEditingController();
   final _deadline = TextEditingController();
-  final _destination = TextEditingController();
   final _weight = TextEditingController();
   final _volume = TextEditingController();
   final _price = TextEditingController();
   final _freight = TextEditingController();
-  Map<String, dynamic>? _catalog, _page, _selected, _simulation;
-  List<Map<String, dynamic>> _orders = [];
-  String? _originState, _destinationState, _region, _risk, _sellerId;
+  final _items = TextEditingController(text: '1');
+  final _seller = TextEditingController();
+  Map<String, dynamic>? _origin, _destination, _result;
   String? _error;
-  String _sellerLabel = '';
-  bool _loading = true,
-      _searching = false,
-      _selecting = false,
-      _simulating = false;
-  bool _streets = false, _mapReady = false;
-  int _offset = 0, _selectionId = 0;
+  bool _busy = false, _exampleBusy = false, _modal = false;
+  int _fit = 0, _reset = 0;
+  bool get _disabled => _busy || _exampleBusy;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    final now = DateTime.now();
+    final purchase = DateTime(now.year, now.month, now.day + 1, 9);
+    _setDates(purchase, purchase.add(const Duration(days: 1, hours: 6)),
+        purchase.add(const Duration(days: 8, hours: 9)));
+  }
+
+  static String _format(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+  static DateTime? _parse(String text) {
+    final match = RegExp(r'^(\d{2})/(\d{2})/(\d{4})(?:\s+(\d{2}):(\d{2}))?$')
+        .firstMatch(text.trim());
+    if (match == null) return null;
+    final parts = [
+      for (final i in [1, 2, 3]) int.parse(match.group(i)!)
+    ];
+    final hour = int.parse(match.group(4) ?? '9'),
+        minute = int.parse(match.group(5) ?? '0');
+    final d = DateTime(parts[2], parts[1], parts[0], hour, minute);
+    return d.year == parts[2] &&
+            d.month == parts[1] &&
+            d.day == parts[0] &&
+            hour < 24 &&
+            minute < 60
+        ? d
+        : null;
+  }
+
+  void _setDates(DateTime p, DateTime d, DateTime e) {
+    _purchase.text = _format(p);
+    _dispatch.text = _format(d);
+    _deadline.text = _format(e);
+  }
+
+  void _invalidate() {
+    if (_result != null) setState(() => _result = null);
   }
 
   @override
   void dispose() {
     for (final c in [
-      _start,
-      _end,
-      _originPrefix,
-      _destinationPrefix,
-      _id,
       _purchase,
       _dispatch,
       _deadline,
-      _destination,
       _weight,
       _volume,
       _price,
-      _freight
+      _freight,
+      _items,
+      _seller
     ]) {
       c.dispose();
     }
     if (widget.api == null) _api.close();
-    _map.dispose();
     super.dispose();
   }
 
-  Future<void> _load() async {
+  Future<void> _example() async {
     setState(() {
-      _loading = true;
+      _exampleBusy = true;
       _error = null;
+      _result = null;
     });
     try {
-      final data = await _api.get('catalog');
+      final places = await Future.wait([
+        _api.get('locations', {'q': '01001'}),
+        _api.get('locations', {'q': '20040'})
+      ]);
       if (!mounted) return;
-      setState(() {
-        _catalog = data;
-        _start.text = data['start_date'] as String;
-        _end.text = data['end_date'] as String;
-        _loading = false;
-      });
-      await _search();
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = e.toString();
-          _loading = false;
-        });
+      final origins = (places[0]['data'] as List).cast<Map<String, dynamic>>();
+      final destinations =
+          (places[1]['data'] as List).cast<Map<String, dynamic>>();
+      if (origins.isEmpty || destinations.isEmpty) {
+        throw Exception('Exemplo indisponível no catálogo de CEPs.');
       }
-    }
-  }
-
-  Future<void> _search({int offset = 0}) async {
-    setState(() {
-      _searching = true;
-      _error = null;
-    });
-    final query = <String, String>{'offset': '$offset', 'limit': '30'};
-    for (final entry in <String, String?>{
-      'start_date': _start.text.trim(),
-      'end_date': _end.text.trim(),
-      'origin_state': _originState,
-      'destination_state': _destinationState,
-      'region': _region,
-      'risk': _risk,
-      'origin_prefix': _originPrefix.text.trim(),
-      'destination_prefix': _destinationPrefix.text.trim(),
-      'order_id': _id.text.trim(),
-    }.entries) {
-      if (entry.value != null && entry.value!.isNotEmpty) {
-        query[entry.key] = entry.value!;
-      }
-    }
-    try {
-      final result = await _api.get('orders', query);
-      if (!mounted) return;
+      final now = DateTime.now();
+      final year =
+          DateTime(now.year, 12, 23).isBefore(now) ? now.year + 1 : now.year;
       setState(() {
-        _page = result;
-        _orders = (result['data'] as List).cast<Map<String, dynamic>>();
-        _offset = offset;
-        _selected = null;
-        _simulation = null;
-        _selectionId++;
-        _selecting = false;
+        _origin = origins.first;
+        _destination = destinations.first;
+        _fit++;
+        _reset++;
+        _setDates(DateTime(year, 12, 23, 9), DateTime(year, 12, 24, 15),
+            DateTime(year + 1, 1, 4, 18));
+        _weight.text = '0,5';
+        _volume.text = '1200';
+        _price.text = '100';
+        _freight.text = '20';
+        _items.text = '1';
+        _seller.clear();
       });
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
-      if (mounted) setState(() => _searching = false);
-    }
-  }
-
-  Future<void> _select(Map<String, dynamic> item) async {
-    final requestId = ++_selectionId;
-    setState(() {
-      _selecting = true;
-      _simulation = null;
-      _error = null;
-    });
-    try {
-      final data =
-          await _api.get('order', {'order_id': item['order_id'] as String});
-      if (!mounted || requestId != _selectionId) return;
-      final s = data['shipment'] as Map<String, dynamic>;
-      setState(() {
-        _selected = data;
-        _sellerId = null;
-        _sellerLabel =
-            '${s['seller_state']} · CEP ${s['origin_prefix5']} · vendedor ${s['seller_id']}';
-        _purchase.text = s['purchase_at'] as String;
-        _dispatch.text = s['dispatched_at'] as String;
-        _deadline.text = s['estimated_delivery_at'] as String;
-        _destination.text = s['destination_prefix5'] as String;
-        _weight.text = s['total_weight_g'] == null
-            ? ''
-            : '${(s['total_weight_g'] as num) / 1000}';
-        _volume.text = s['total_volume_cm3']?.toString() ?? '';
-        _price.text = s['price'].toString();
-        _freight.text = s['freight_value'].toString();
-      });
-      _fit();
-      _scrollTo(_scenarioAnchor);
-    } catch (e) {
-      if (mounted && requestId == _selectionId) {
-        setState(() => _error = e.toString());
-      }
-    } finally {
-      if (mounted && requestId == _selectionId) {
-        setState(() => _selecting = false);
-      }
+      if (mounted) setState(() => _exampleBusy = false);
     }
   }
 
   Future<void> _run() async {
+    FocusScope.of(context).unfocus();
     if (!_form.currentState!.validate()) return;
-    final id = _selected!['order_id'];
-    final selectionId = _selectionId;
+    if (_origin == null || _destination == null) {
+      setState(() => _error =
+          'Pesquise e selecione a origem e o destino pelas sugestões.');
+      return;
+    }
+    double number(TextEditingController c) =>
+        double.parse(c.text.trim().replaceAll(',', '.'));
     final body = <String, dynamic>{
-      'order_id': id,
-      'purchase_at': _purchase.text.trim().replaceFirst(' ', 'T'),
-      'dispatched_at': _dispatch.text.trim().replaceFirst(' ', 'T'),
-      'estimated_delivery_at': _deadline.text.trim().replaceFirst(' ', 'T'),
-      'destination_prefix5':
-          _destination.text.trim().replaceAll('-', '').substring(0, 5),
-      if (_sellerId != null) 'seller_id': _sellerId,
+      'purchase_at': _parse(_purchase.text)!.toIso8601String(),
+      'dispatched_at': _parse(_dispatch.text)!.toIso8601String(),
+      'estimated_delivery_at': _parse(_deadline.text)!.toIso8601String(),
+      'origin_prefix5': _origin!['prefix5'],
+      'destination_prefix5': _destination!['prefix5'],
+      'total_weight_g': number(_weight) * 1000,
+      if (_volume.text.trim().isNotEmpty) 'total_volume_cm3': number(_volume),
+      'items_count': int.parse(_items.text.trim()),
+      'price': number(_price),
+      'freight_value': number(_freight),
+      if (_seller.text.trim().isNotEmpty) 'seller_id': _seller.text.trim(),
     };
-    for (final entry in <String, TextEditingController>{
-      'total_weight_g': _weight,
-      'total_volume_cm3': _volume,
-      'price': _price,
-      'freight_value': _freight,
-    }.entries) {
-      if (entry.value.text.trim().isNotEmpty) {
-        final value =
-            double.parse(entry.value.text.trim().replaceAll(',', '.'));
-        body[entry.key] = entry.key == 'total_weight_g' ? value * 1000 : value;
-      }
-    }
-    setState(() {
-      _simulating = true;
-      _error = null;
-    });
-    try {
-      final result = await _api.simulate(body);
-      if (!mounted || selectionId != _selectionId) return;
-      setState(() => _simulation = result);
-      _fit();
-      _scrollTo(_resultAnchor);
-    } catch (e) {
-      if (mounted && selectionId == _selectionId) {
-        setState(() => _error = e.toString());
-      }
-    } finally {
-      if (mounted) setState(() => _simulating = false);
-    }
-  }
-
-  LatLng? _point(dynamic value) {
-    if (value is! Map ||
-        value['latitude'] is! num ||
-        value['longitude'] is! num) {
-      return null;
-    }
-    return LatLng((value['latitude'] as num).toDouble(),
-        (value['longitude'] as num).toDouble());
-  }
-
-  void _fit() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_mapReady) return;
-      final data = _simulation ?? _selected;
-      final a = _point(data?['origin']), b = _point(data?['destination']);
-      if (a == null || b == null) return;
-      _map.fitCamera(CameraFit.bounds(
-          bounds: LatLngBounds.fromPoints([a, b]),
-          padding: const EdgeInsets.all(45),
-          maxZoom: 10));
-    });
-  }
-
-  void _scrollTo(GlobalKey key) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || key.currentContext == null) return;
-      Scrollable.ensureVisible(key.currentContext!,
-          alignment: .1, duration: const Duration(milliseconds: 250));
-    });
-  }
-
-  Color _color(String? risk) => switch (risk) {
-        'Alto' => const Color(0xFFDC2626),
-        'Médio' => const Color(0xFFD97706),
-        _ => const Color(0xFF15803D),
-      };
-
-  Widget _badge(String risk) => Chip(
-      avatar: Icon(Icons.circle, size: 12, color: _color(risk)),
-      label: Text('$risk risco'),
-      visualDensity: VisualDensity.compact);
-
-  Widget _card(Widget child) => Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Padding(padding: const EdgeInsets.all(18), child: child));
-
-  Widget _text(TextEditingController c, String label,
-          {double width = 190,
-          String? hint,
-          bool number = false,
-          String? Function(String?)? validator,
-          Key? key}) =>
-      SizedBox(
-          width: width,
-          child: TextFormField(
-            key: key,
-            controller: c,
-            enabled: !_simulating && !_searching,
-            keyboardType: number
-                ? const TextInputType.numberWithOptions(decimal: true)
-                : TextInputType.text,
-            decoration: InputDecoration(
-                labelText: label,
-                hintText: hint,
-                border: const OutlineInputBorder()),
-            validator: validator ??
-                (number
-                    ? (v) {
-                        if (v == null || v.trim().isEmpty) return null;
-                        final n =
-                            double.tryParse(v.trim().replaceAll(',', '.'));
-                        return n == null || !n.isFinite || n < 0
-                            ? 'Informe um número positivo ou zero.'
-                            : null;
-                      }
-                    : null),
-          ));
-
-  Widget _dateField(TextEditingController c, String label,
-          {bool time = false, Key? key}) =>
-      SizedBox(
-          width: time ? 260 : 190,
-          child: TextFormField(
-            key: key,
-            controller: c,
-            enabled: !_searching && !_simulating,
-            validator: time
-                ? (v) => DateTime.tryParse(v ?? '') == null
-                    ? 'Use uma data válida.'
-                    : null
-                : null,
-            decoration: InputDecoration(
-                labelText: label,
-                hintText: time ? 'AAAA-MM-DDTHH:MM:SS' : 'AAAA-MM-DD',
-                border: const OutlineInputBorder(),
-                suffixIcon: IconButton(
-                    icon: const Icon(Icons.calendar_month),
-                    tooltip: 'Escolher $label',
-                    onPressed: _simulating || _searching
-                        ? null
-                        : () async {
-                            final current = DateTime.tryParse(c.text) ??
-                                DateTime(2018, 6, 1);
-                            final picked = await showDatePicker(
-                                context: context,
-                                initialDate:
-                                    current.year >= 2016 && current.year <= 2035
-                                        ? current
-                                        : DateTime(2018, 6, 1),
-                                firstDate: DateTime(2016),
-                                lastDate: DateTime(2035, 12, 31));
-                            if (picked != null && mounted) {
-                              c.text = time
-                                  ? DateTime(
-                                          picked.year,
-                                          picked.month,
-                                          picked.day,
-                                          current.hour,
-                                          current.minute,
-                                          current.second)
-                                      .toIso8601String()
-                                      .split('.')
-                                      .first
-                                  : picked.toIso8601String().substring(0, 10);
-                            }
-                          })),
-          ));
-
-  Widget _dropdown(String label, String? value, List<String> options,
-          ValueChanged<String?> changed) =>
-      SizedBox(
-          width: 185,
-          child: DropdownButtonFormField<String>(
-              key: ValueKey('$label-$value'),
-              initialValue: value,
-              isExpanded: true,
-              decoration: InputDecoration(
-                  labelText: label, border: const OutlineInputBorder()),
-              items: [
-                const DropdownMenuItem<String>(
-                    value: null, child: Text('Todos')),
-                ...options
-                    .map((x) => DropdownMenuItem(value: x, child: Text(x)))
-              ],
-              onChanged: _searching || _simulating ? null : changed));
-
-  Widget _filters() =>
-      _card(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Pesquisar pedidos reais',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 6),
-        const Text(
-            'As datas filtram a compra. Os riscos são previsões preservadas do teste histórico do modelo 564 + filtro.'),
-        const SizedBox(height: 18),
-        Wrap(spacing: 12, runSpacing: 14, children: [
-          _dateField(_start, 'Compra a partir de'),
-          _dateField(_end, 'Compra até'),
-          _dropdown(
-              'UF de origem',
-              _originState,
-              List<String>.from(_catalog!['states']),
-              (v) => setState(() => _originState = v)),
-          _dropdown(
-              'UF de destino',
-              _destinationState,
-              List<String>.from(_catalog!['states']),
-              (v) => setState(() => _destinationState = v)),
-          _dropdown(
-              'Região de destino',
-              _region,
-              List<String>.from(_catalog!['regions']),
-              (v) => setState(() => _region = v)),
-          _dropdown('Classificação', _risk, ['Baixo', 'Médio', 'Alto'],
-              (v) => setState(() => _risk = v)),
-          _text(_originPrefix, 'Prefixo CEP origem', hint: '1 a 5 dígitos'),
-          _text(_destinationPrefix, 'Prefixo CEP destino',
-              hint: '1 a 5 dígitos'),
-          _text(_id, 'Parte do ID do pedido', width: 290),
-        ]),
-        const SizedBox(height: 16),
-        Wrap(
-            spacing: 10,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              FilledButton.icon(
-                  key: const ValueKey('map-search'),
-                  onPressed: _searching || _simulating ? null : () => _search(),
-                  icon: const Icon(Icons.search),
-                  label:
-                      Text(_searching ? 'Pesquisando...' : 'Aplicar filtros')),
-              OutlinedButton(
-                  onPressed: _searching || _simulating
-                      ? null
-                      : () {
-                          setState(() {
-                            _originState = null;
-                            _destinationState = null;
-                            _region = null;
-                            _risk = null;
-                            _originPrefix.clear();
-                            _destinationPrefix.clear();
-                            _id.clear();
-                            _start.text = _catalog!['start_date'] as String;
-                            _end.text = _catalog!['end_date'] as String;
-                          });
-                          _search();
-                        },
-                  child: const Text('Limpar filtros')),
-              for (final band in ['Baixo', 'Médio', 'Alto'])
-                ActionChip(
-                    label: Text('Exemplos: $band'),
-                    onPressed: _searching || _simulating
-                        ? null
-                        : () {
-                            setState(() => _risk = band);
-                            _search();
-                          }),
-            ]),
-        if (_searching)
-          const Padding(
-              padding: EdgeInsets.only(top: 12),
-              child: LinearProgressIndicator()),
-      ]));
-
-  Widget _mapView() {
-    final selected = _simulation ?? _selected;
-    final origin = _point(selected?['origin']);
-    final destination = _point(selected?['destination']);
-    final risk =
-        (_simulation?['result']?['risk'] ?? _selected?['risk']) as String?;
-    final markers = <Marker>[
-      for (final row in _orders)
-        if (_point(row['destination']) != null &&
-            row['order_id'] != _selected?['order_id'])
-          Marker(
-              point: _point(row['destination'])!,
-              width: 38,
-              height: 46,
-              child: Tooltip(
-                  message: '${row['risk']} risco · ${row['order_id']}',
-                  child: IconButton(
-                      padding: EdgeInsets.zero,
-                      onPressed:
-                          _selecting || _simulating ? null : () => _select(row),
-                      icon: Icon(Icons.location_on,
-                          color: _color(row['risk'] as String), size: 32)))),
-      if (origin != null)
-        Marker(
-            point: origin,
-            width: 44,
-            height: 44,
-            child: const Tooltip(
-                message: 'Origem do pedido selecionado',
-                child:
-                    Icon(Icons.warehouse, color: Color(0xFF2563EB), size: 32))),
-      if (destination != null)
-        Marker(
-            point: destination,
-            width: 44,
-            height: 44,
-            child: Tooltip(
-                message: 'Destino · $risk risco',
-                child: Icon(Icons.location_on, color: _color(risk), size: 40))),
-    ];
-    return _card(
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Text('Previsões no mapa',
-          style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
-      Wrap(spacing: 8, children: [
-        for (final band in ['Baixo', 'Médio', 'Alto']) _badge(band)
-      ]),
-      const Text(
-          'Toque em um destino ou selecione um pedido na lista. A linha mostra a ligação geográfica, sem representar uma rodovia.'),
-      SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          dense: true,
-          title: const Text('Mostrar ruas (requer internet)'),
-          value: _streets,
-          onChanged: (v) => setState(() => _streets = v)),
-      SizedBox(
-          height: 440,
-          child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: FlutterMap(
-                mapController: _map,
-                options: MapOptions(
-                    initialCenter: const LatLng(-15, -51),
-                    initialZoom: 3.4,
-                    minZoom: 2,
-                    maxZoom: 14,
-                    backgroundColor: const Color(0xFFE5EEF5),
-                    onMapReady: () {
-                      _mapReady = true;
-                      _fit();
-                    }),
-                children: [
-                  if (_streets)
-                    TileLayer(
-                        urlTemplate:
-                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        userAgentPackageName: 'br.edu.fatec.logipredict'),
-                  GeoJsonLayer.asset('assets/geojson/brazil_regions.geojson',
-                      onPolygon: (points, holes, properties) => Polygon(
-                          points: points,
-                          holePointsList: holes,
-                          color: const Color(0x302563EB),
-                          borderColor: const Color(0xFF64748B),
-                          borderStrokeWidth: 1.2)),
-                  if (origin != null && destination != null)
-                    PolylineLayer(polylines: [
-                      Polyline(
-                          points: [origin, destination],
-                          color: _color(risk),
-                          strokeWidth: 3)
-                    ]),
-                  MarkerLayer(markers: markers),
-                  RichAttributionWidget(attributions: [
-                    const TextSourceAttribution(
-                        'Regiões: IBGE · Pontos aproximados: Olist'),
-                    if (_streets)
-                      const TextSourceAttribution(
-                          '© OpenStreetMap contributors'),
-                  ]),
-                ],
-              ))),
-      const SizedBox(height: 8),
-      const Text(
-          'O contorno do Brasil e os pontos funcionam sem internet. CEP de 5 dígitos representa uma área aproximada.'),
-    ]));
-  }
-
-  Widget _list() {
-    final total = (_page?['total'] as num?)?.toInt() ?? 0;
-    final counts = _page?['counts'] as Map? ?? {};
-    return _card(
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('$total pedidos encontrados',
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-      Text(
-          'Nos filtros aplicados: ${counts['Baixo'] ?? 0} baixos · ${counts['Médio'] ?? 0} médios · ${counts['Alto'] ?? 0} altos'),
-      if (_orders.isEmpty)
-        const Padding(
-            padding: EdgeInsets.all(20),
-            child: Text('Nenhum pedido corresponde aos filtros.')),
-      for (final row in _orders)
-        ListTile(
-          key: ValueKey('order-${row['order_id']}'),
-          selected: row['order_id'] == _selected?['order_id'],
-          contentPadding: EdgeInsets.zero,
-          dense: true,
-          leading: Icon(Icons.circle,
-              color: _color(row['risk'] as String), size: 14),
-          title: Text(row['order_id'] as String,
-              maxLines: 1, overflow: TextOverflow.ellipsis),
-          subtitle: Text(
-              '${row['origin']?['state'] ?? '?'} → ${row['destination']?['state'] ?? '?'} · compra ${_day(row['purchase_at'])} · ${row['risk']} risco${row['already_overdue'] == true ? ' · prazo já vencido' : ''}'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: _simulating || _selecting ? null : () => _select(row),
-        ),
-      Row(children: [
-        IconButton(
-            tooltip: 'Página anterior',
-            onPressed: _offset == 0 || _searching || _simulating
-                ? null
-                : () => _search(offset: _offset - 30),
-            icon: const Icon(Icons.chevron_left)),
-        Expanded(
-            child: Text(
-                total == 0
-                    ? '0 resultados'
-                    : '${_offset + 1}–${_offset + _orders.length} de $total',
-                textAlign: TextAlign.center)),
-        IconButton(
-            tooltip: 'Próxima página',
-            onPressed:
-                _offset + _orders.length >= total || _searching || _simulating
-                    ? null
-                    : () => _search(offset: _offset + 30),
-            icon: const Icon(Icons.chevron_right)),
-      ]),
-    ]));
-  }
-
-  String _day(dynamic value) {
-    final s = value?.toString() ?? '';
-    if (s.length < 10) return s;
-    return '${s.substring(8, 10)}/${s.substring(5, 7)}/${s.substring(0, 4)}';
-  }
-
-  Future<void> _chooseSeller() async {
-    final chosen = await showDialog<Map<String, dynamic>>(
-        context: context, builder: (_) => _SellerDialog(api: _api));
-    if (chosen != null && mounted) {
-      setState(() {
-        _sellerId = chosen['seller_id'] as String;
-        _sellerLabel =
-            '${chosen['city']} / ${chosen['state']} · CEP ${chosen['prefix5']} · $_sellerId';
-      });
-    }
-  }
-
-  Widget _scenario() {
-    if (_selecting) {
-      return _card(const Center(child: CircularProgressIndicator()));
-    }
-    if (_selected == null) {
-      return _card(const Text(
-          'Selecione um pedido para ver os detalhes e simular mudanças.'));
-    }
-    final single = _selected!['shipment']['sellers_count'] == 1;
-    return _card(Form(
-        key: _form,
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Simular este pedido',
-              key: _scenarioAnchor,
-              style:
-                  const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          SelectableText('Pedido: ${_selected!['order_id']}'),
-          _badge(_selected!['risk'] as String),
-          const Text(
-              'Altere os dados e compare cenários. A simulação não altera o pedido salvo e não treina novamente o modelo.'),
-          const Text(
-              'Campos numéricos em branco mantêm o valor original do pedido.'),
-          const SizedBox(height: 16),
-          Wrap(spacing: 12, runSpacing: 14, children: [
-            _dateField(_purchase, 'Data/hora da compra', time: true),
-            _dateField(_dispatch, 'Data/hora do despacho',
-                time: true, key: const ValueKey('scenario-dispatch')),
-            _dateField(_deadline, 'Prazo prometido', time: true),
-            _text(_destination, 'CEP destino (5 ou 8 dígitos)',
-                width: 246,
-                key: const ValueKey('scenario-destination'),
-                validator: (v) =>
-                    RegExp(r'^\d{5}(-?\d{3})?$').hasMatch((v ?? '').trim())
-                        ? null
-                        : 'Use 5 ou 8 dígitos de CEP.'),
-            _text(_weight, 'Peso total (kg)', number: true),
-            _text(_volume, 'Volume total (cm³)', number: true),
-            _text(_price, 'Preço total (R\$)', number: true),
-            _text(_freight, 'Frete (R\$)', number: true),
-          ]),
-          const SizedBox(height: 12),
-          Text('Origem: $_sellerLabel'),
-          TextButton.icon(
-              onPressed: !single || _simulating ? null : _chooseSeller,
-              icon: const Icon(Icons.warehouse_outlined),
-              label: const Text('Escolher outro vendedor real')),
-          if (!single)
-            const Text(
-                'A rota de pedidos com vários vendedores é mantida; selecione um pedido com um vendedor para mudar a rota.'),
-          const SizedBox(height: 6),
-          FilledButton.icon(
-              key: const ValueKey('map-simulate'),
-              onPressed: _simulating ? null : _run,
-              icon: const Icon(Icons.science_outlined),
-              label: Text(_simulating
-                  ? 'Comparando cenários...'
-                  : 'Simular e comparar cenários')),
-          if (_simulating)
-            const Padding(
-                padding: EdgeInsets.only(top: 12),
-                child: LinearProgressIndicator()),
-          if (_simulation != null) ..._result(),
-          ExpansionTile(
-              tilePadding: EdgeInsets.zero,
-              title: const Text('Conferir o resultado histórico real'),
-              children: [
-                Text(_selected!['observed_late'] == true
-                    ? 'Este pedido foi entregue com atraso na base Olist.'
-                    : 'Este pedido foi entregue no prazo na base Olist.'),
-                const Text(
-                    'Informação posterior à entrega, usada apenas para conferência. Não entra na previsão nem nos cenários.'),
-              ]),
-        ])));
-  }
-
-  List<Widget> _result() {
-    final data = _simulation!;
-    final r = data['result'] as Map<String, dynamic>;
-    final calendar = data['calendar'] as Map<String, dynamic>;
-    final holidays = calendar['fixed_national_holidays'] as List;
-    return [
-      const Divider(height: 32),
-      Text('Resultado do cenário informado',
-          key: _resultAnchor,
-          style: const TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
-      _badge(r['risk'] as String),
-      Text(r['predicted_late'] == true
-          ? 'O modelo final manteve o alerta de atraso.'
-          : 'O modelo final não manteve alerta. Ainda pode ocorrer atraso.'),
-      Text(
-          'Prazo disponível: ${r['remaining_days']} dias corridos · distância: ${(data['shipment']['distance_km'] as num?)?.toStringAsFixed(1) ?? 'não disponível'} km em linha reta.'),
-      if (r['already_overdue'] == true)
-        const Text('O prazo já estava vencido no despacho.',
-            style: TextStyle(
-                fontWeight: FontWeight.bold, color: Color(0xFFDC2626))),
-      const SizedBox(height: 12),
-      for (final text in data['suggestions'] as List)
-        Padding(
-            padding: const EdgeInsets.only(bottom: 8), child: Text('• $text')),
-      const Text('Calendário', style: TextStyle(fontWeight: FontWeight.bold)),
-      Text(calendar['dispatch_holiday'] != null
-          ? 'Despacho em ${calendar['dispatch_holiday']}.'
-          : calendar['dispatch_weekend'] == true
-              ? 'Despacho no fim de semana.'
-              : 'Despacho fora dos feriados fixos nacionais cadastrados.'),
-      Text(holidays.isEmpty
-          ? 'Nenhum feriado fixo nacional entre o despacho e o prazo.'
-          : holidays
-              .map((h) => '${_day(h['date'])}: ${h['name']}')
-              .join(' · ')),
-      Text(calendar['coverage'] as String),
-      const Text(
-          'Feriados são contexto do calendário; não são um atributo explícito deste modelo.'),
-      const SizedBox(height: 16),
-      const Text('Alternativas comparadas',
-          style: TextStyle(fontWeight: FontWeight.bold)),
-      for (final a
-          in (data['alternatives'] as List).cast<Map<String, dynamic>>())
-        Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                    border: Border.all(
-                        color:
-                            _color(a['risk'] as String).withValues(alpha: .45)),
-                    borderRadius: BorderRadius.circular(10)),
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(a['label'] as String,
-                          style: const TextStyle(fontWeight: FontWeight.w600)),
-                      Text(
-                          '${a['risk']} risco · despacho ${_day(a['dispatched_at'])} · prazo ${_day(a['estimated_delivery_at'])}'),
-                      Text(a['lower_risk'] == true
-                          ? 'Faixa de risco menor nesta simulação.'
-                          : 'Sem redução da faixa de risco.'),
-                    ]))),
-      const SizedBox(height: 8),
-      Text(data['comparison_policy'] as String),
-      ExpansionTile(
-          tilePadding: EdgeInsets.zero,
-          title: const Text('Como o modelo tomou esta decisão'),
-          children: [
-            SelectableText('Modelo: ${data['model_version']}\n'
-                'Random Forest: ${(r['base_score'] as num).toStringAsFixed(4)} · corte ${(r['base_threshold'] as num).toStringAsFixed(4)}\n'
-                'Score final: ${(r['score'] as num).toStringAsFixed(5)} · corte ${(r['threshold'] as num).toStringAsFixed(5)}\n'
-                'Entregas anteriores do vendedor: ${r['history']['seller_orders']}\n'
-                'Entregas anteriores na rota entre UFs: ${r['history']['route_orders']}\n'
-                'Histórico disponível até: ${r['history']['history_asof']}'),
-            const Text(
-                'Scores não são porcentagens de chance. Baixo: sem alerta inicial. Médio: alerta inicial retirado pelo filtro. Alto: alerta mantido.'),
-          ]),
-      for (final warning in data['warnings'] as List)
-        Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child:
-                Text('Aviso: $warning', style: const TextStyle(fontSize: 12))),
-    ];
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    super.build(context);
-    if (_loading) return const Center(child: CircularProgressIndicator());
-    if (_catalog == null) {
-      return Center(
-          child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Text(_error ?? 'Mapa indisponível',
-                    textAlign: TextAlign.center),
-                const SizedBox(height: 12),
-                FilledButton(
-                    onPressed: _load,
-                    child: const Text('Tentar carregar novamente')),
-              ])));
-    }
-    final metrics = _catalog!['metrics'] as Map;
-    final tp = (metrics['TP'] as num).toInt();
-    final missed = (metrics['FN'] as num).toInt();
-    final recall =
-        (100 * tp / (tp + missed)).toStringAsFixed(1).replaceAll('.', ',');
-    return SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child:
-            Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          _filters(),
-          if (_error != null)
-            _card(Text(_error!,
-                key: const ValueKey('map-error'),
-                style: TextStyle(color: Theme.of(context).colorScheme.error))),
-          _card(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text(
-                'Modelo 564 + filtro · Olist real · pesquisa retrospectiva',
-                style: TextStyle(fontWeight: FontWeight.bold)),
-            Text(
-                'No teste histórico: $tp de ${tp + missed} atrasos encontrados ($recall%) e ${metrics['FP']} falsos alertas. Entre os $tp, ${metrics['known_overdue_TP']} já estavam vencidos no despacho.'),
-            ExpansionTile(
-                tilePadding: EdgeInsets.zero,
-                title: const Text('Entender as faixas e os limites'),
-                children: [
-                  for (final entry
-                      in (_catalog!['risk_definitions'] as Map).entries)
-                    Text('${entry.key}: ${entry.value}'),
-                  for (final limitation in _catalog!['limitations'] as List)
-                    Text('• $limitation'),
-                ]),
-          ])),
-          LayoutBuilder(
-              builder: (context, constraints) => constraints.maxWidth >= 1050
-                  ? Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                          Expanded(
-                              flex: 6,
-                              child: Column(children: [_mapView(), _list()])),
-                          const SizedBox(width: 16),
-                          Expanded(flex: 5, child: _scenario()),
-                        ])
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [_mapView(), _scenario(), _list()])),
-        ]));
-  }
-}
-
-/// A origem sempre identifica um vendedor existente; nunca cria um seller_id.
-class _SellerDialog extends StatefulWidget {
-  const _SellerDialog({required this.api});
-  final MapScenariosApi api;
-  @override
-  State<_SellerDialog> createState() => _SellerDialogState();
-}
-
-class _SellerDialogState extends State<_SellerDialog> {
-  final _query = TextEditingController();
-  List<Map<String, dynamic>> _sellers = [];
-  bool _busy = true;
-  String? _error;
-  @override
-  void initState() {
-    super.initState();
-    _search();
-  }
-
-  @override
-  void dispose() {
-    _query.dispose();
-    super.dispose();
-  }
-
-  Future<void> _search() async {
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      final result = await widget.api.get('sellers', {'q': _query.text.trim()});
+      final result = await _api.forecast(body);
       if (mounted) {
-        setState(() =>
-            _sellers = (result['data'] as List).cast<Map<String, dynamic>>());
+        setState(() {
+          _result = result;
+          _fit++;
+        });
       }
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
@@ -903,39 +175,514 @@ class _SellerDialogState extends State<_SellerDialog> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) => AlertDialog(
-        title: const Text('Vendedores reais da Olist'),
-        content: SizedBox(
-            width: 560,
-            height: 420,
-            child: Column(children: [
-              TextField(
-                  controller: _query,
-                  onSubmitted: (_) => _search(),
-                  decoration: InputDecoration(
-                      labelText: 'Cidade, UF, prefixo ou ID',
-                      suffixIcon: IconButton(
-                          onPressed: _busy ? null : _search,
-                          icon: const Icon(Icons.search)))),
-              if (_busy) const LinearProgressIndicator(),
-              if (_error != null) Text(_error!),
+  Future<void> _pickDate(TextEditingController c, String label) async {
+    setState(() => _modal = true);
+    try {
+      final parsed = _parse(c.text);
+      final current =
+          parsed != null && parsed.year >= 2016 && parsed.year <= 2035
+              ? parsed
+              : DateTime.now();
+      final d = await showDatePicker(
+          context: context,
+          initialDate: current,
+          firstDate: DateTime(2016),
+          lastDate: DateTime(2035, 12, 31),
+          helpText: label,
+          cancelText: 'Cancelar',
+          confirmText: 'Confirmar');
+      if (d != null && mounted) {
+        c.text = _format(
+            DateTime(d.year, d.month, d.day, current.hour, current.minute));
+        _invalidate();
+      }
+    } finally {
+      if (mounted) setState(() => _modal = false);
+    }
+  }
+
+  Widget _section(String title, IconData icon) => Padding(
+      padding: const EdgeInsets.only(top: 20, bottom: 12),
+      child: Row(children: [
+        Icon(icon, size: 18, color: const Color(0xFF2563EB)),
+        const SizedBox(width: 8),
+        Text(title,
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14))
+      ]));
+  Widget _date(TextEditingController c, String label, Key key) => Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: TextFormField(
+          key: key,
+          controller: c,
+          enabled: !_disabled,
+          decoration: InputDecoration(
+              labelText: label,
+              hintText: 'DD/MM/AAAA HH:mm',
+              isDense: true,
+              border: const OutlineInputBorder(),
+              suffixIcon: IconButton(
+                  tooltip: 'Escolher $label',
+                  onPressed: _disabled ? null : () => _pickDate(c, label),
+                  icon: const Icon(Icons.calendar_month_outlined, size: 19))),
+          validator: (v) =>
+              _parse(v ?? '') == null ? 'Use DD/MM/AAAA HH:mm.' : null));
+  Widget _number(TextEditingController c, String label,
+          {bool optional = false, bool integer = false, Key? key}) =>
+      TextFormField(
+          key: key,
+          controller: c,
+          enabled: !_disabled,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: InputDecoration(
+              labelText: label,
+              isDense: true,
+              border: const OutlineInputBorder()),
+          validator: (v) {
+            if (optional && (v ?? '').trim().isEmpty) return null;
+            final n = double.tryParse((v ?? '').trim().replaceAll(',', '.'));
+            if (n == null || !n.isFinite || n < 0) return 'Valor inválido.';
+            if (integer &&
+                (int.tryParse((v ?? '').trim()) == null || n < 1 || n > 10000)) {
+              return 'Informe de 1 a 10.000 itens.';
+            }
+            return null;
+          });
+
+  Widget _sidebar() => Form(
+      key: _form,
+      onChanged: _invalidate,
+      child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            const Text('Planejar uma entrega',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 6),
+            const Text(
+                'Informe uma compra futura e compare o risco antes de fechar o pedido.',
+                style: TextStyle(color: Color(0xFF64748B), height: 1.45)),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+                key: const ValueKey('future-example'),
+                onPressed: _disabled ? null : _example,
+                icon: const Icon(Icons.auto_awesome_outlined, size: 17),
+                label: Text(_exampleBusy
+                    ? 'Carregando exemplo…'
+                    : 'Exemplo: compra em 23/12')),
+            _section('Origem e destino', Icons.route_outlined),
+            _LocationPicker(
+                key: ValueKey('origin-$_reset'),
+                label: 'De onde? CEP ou cidade',
+                api: _api,
+                value: _origin,
+                enabled: !_disabled,
+                onSelected: (p) => setState(() {
+                      _origin = p;
+                      _result = null;
+                      _fit++;
+                    })),
+            const SizedBox(height: 12),
+            _LocationPicker(
+                key: ValueKey('destination-$_reset'),
+                label: 'Para onde? CEP ou cidade',
+                api: _api,
+                value: _destination,
+                enabled: !_disabled,
+                onSelected: (p) => setState(() {
+                      _destination = p;
+                      _result = null;
+                      _fit++;
+                    })),
+            _section('Quando?', Icons.event_outlined),
+            _date(_purchase, 'Data/hora da compra',
+                const ValueKey('future-purchase')),
+            _date(_dispatch, 'Data/hora do despacho',
+                const ValueKey('future-dispatch')),
+            _date(_deadline, 'Prazo prometido',
+                const ValueKey('future-deadline')),
+            _section('O que será enviado?', Icons.inventory_2_outlined),
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Expanded(
-                  child: ListView(children: [
-                if (!_busy && _sellers.isEmpty)
-                  const ListTile(title: Text('Nenhum vendedor encontrado.')),
-                for (final s in _sellers)
-                  ListTile(
-                      title: Text(
-                          '${s['city']} / ${s['state']} · ${s['prefix5']}'),
-                      subtitle: Text(s['seller_id'] as String),
-                      onTap: () => Navigator.of(context).pop(s)),
-              ])),
+                  child: _number(_weight, 'Peso (kg)',
+                      key: const ValueKey('future-weight'))),
+              const SizedBox(width: 10),
+              Expanded(child: _number(_items, 'Qtd. de itens', integer: true))
+            ]),
+            const SizedBox(height: 12),
+            _number(_volume, 'Volume (cm³, opcional)', optional: true),
+            const SizedBox(height: 12),
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(child: _number(_price, 'Produtos (R\$)')),
+              const SizedBox(width: 10),
+              Expanded(child: _number(_freight, 'Frete (R\$)'))
+            ]),
+            const SizedBox(height: 8),
+            ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                title: const Text('Vendedor conhecido',
+                    style: TextStyle(fontSize: 13)),
+                children: [
+                  TextFormField(
+                      controller: _seller,
+                      enabled: !_disabled,
+                      decoration: const InputDecoration(
+                          labelText: 'ID Olist do vendedor (opcional)',
+                          isDense: true,
+                          border: OutlineInputBorder())),
+                  const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Text(
+                          'Deixe vazio se não conhece o ID. A análise usará a rota e a região, sem atribuir o histórico de outro vendedor.',
+                          style: TextStyle(
+                              fontSize: 12, color: Color(0xFF64748B)))),
+                ]),
+            if (_error != null)
+              Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text(_error!,
+                      key: const ValueKey('future-error'),
+                      style: TextStyle(
+                          color: Theme.of(context).colorScheme.error))),
+            FilledButton.icon(
+                key: const ValueKey('map-simulate'),
+                onPressed: _disabled ? null : _run,
+                icon: _busy
+                    ? const SizedBox(
+                        width: 17,
+                        height: 17,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.insights_outlined),
+                label: Text(_busy ? 'Analisando…' : 'Calcular risco'),
+                style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                    backgroundColor: const Color(0xFF2563EB))),
+            const SizedBox(height: 10),
+            const Text(
+                'Uma origem por simulação. Os valores do exemplo são hipotéticos; o treinamento permanece o mesmo.',
+                style: TextStyle(
+                    fontSize: 11, color: Color(0xFF64748B), height: 1.4)),
+          ])));
+
+  Color _riskColor(String? risk) => risk == 'Alto'
+      ? const Color(0xFFDC2626)
+      : risk == 'Médio'
+          ? const Color(0xFFD97706)
+          : const Color(0xFF15803D);
+  String _shortDate(dynamic text) {
+    final d = DateTime.tryParse(text?.toString() ?? '');
+    return d == null
+        ? ''
+        : '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}';
+  }
+
+  Widget _resultPanel() {
+    if (_result == null) {
+      return const Padding(
+          padding: EdgeInsets.all(22),
+          child: Row(children: [
+            Icon(Icons.travel_explore, size: 32, color: Color(0xFF2563EB)),
+            SizedBox(width: 14),
+            Expanded(
+                child: Text(
+                    'Monte sua entrega no painel à esquerda. O mapa mostrará a origem, o destino e a classificação calculada pelo modelo.',
+                    style: TextStyle(color: Color(0xFF64748B), height: 1.5)))
+          ]));
+    }
+    final r = _result!['result'] as Map<String, dynamic>;
+    final calendar = _result!['calendar'] as Map<String, dynamic>;
+    final holidays = calendar['fixed_national_holidays'] as List;
+    final color = _riskColor(r['risk'] as String);
+    return Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Wrap(
+              spacing: 18,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                        color: color.withValues(alpha: .09),
+                        borderRadius: BorderRadius.circular(8)),
+                    child: Text('Risco ${r['risk'].toString().toLowerCase()}',
+                        style: TextStyle(
+                            color: color,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 19))),
+                Text(
+                    '${r['remaining_days']} dias disponíveis · ${(_result!['shipment']['distance_km'] as num).toStringAsFixed(0)} km em linha reta',
+                    style: const TextStyle(color: Color(0xFF64748B))),
+              ]),
+          const SizedBox(height: 10),
+          Text(r['predicted_late'] == true
+              ? 'O modelo manteve o alerta de atraso para este cenário.'
+              : 'O modelo não manteve um alerta de atraso para este cenário.'),
+          if (r['already_overdue'] == true)
+            const Text('O prazo informado já estará vencido no despacho.',
+                style: TextStyle(
+                    color: Color(0xFFDC2626), fontWeight: FontWeight.w600)),
+          if (holidays.isNotEmpty)
+            Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                    'No período: ${holidays.map((h) => '${h['name']} (${_shortDate(h['date'])})').join(' · ')}',
+                    style: const TextStyle(
+                        color: Color(0xFFB45309),
+                        fontWeight: FontWeight.w600))),
+          const SizedBox(height: 14),
+          const Text('Compare outras possibilidades',
+              style: TextStyle(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          Wrap(spacing: 10, runSpacing: 10, children: [
+            for (final a in (_result!['alternatives'] as List)
+                .cast<Map<String, dynamic>>())
+              SizedBox(
+                  width: 242,
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                        border:
+                            Border.all(color: Theme.of(context).dividerColor),
+                        borderRadius: BorderRadius.circular(10)),
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(a['label'] as String,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w600, fontSize: 12)),
+                          const SizedBox(height: 5),
+                          Text('${a['risk']} risco',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: _riskColor(a['risk'] as String))),
+                          Text(
+                              'Despacho ${_shortDate(a['dispatched_at'])} · prazo ${_shortDate(a['estimated_delivery_at'])}',
+                              style: const TextStyle(
+                                  fontSize: 11, color: Color(0xFF64748B))),
+                        ]),
+                  ))
+          ]),
+          const SizedBox(height: 12),
+          for (final suggestion in _result!['suggestions'] as List)
+            Padding(
+                padding: const EdgeInsets.only(bottom: 5),
+                child: Text('• $suggestion',
+                    style: const TextStyle(fontSize: 12))),
+          const SizedBox(height: 6),
+          const Text(
+              'Estimativa exploratória com dados Olist de 2016–2018. Não é garantia de entrega nem uma porcentagem calibrada. Feriados aparecem como contexto, sem efeito causal comprovado no modelo.',
+              style: TextStyle(
+                  fontSize: 11, color: Color(0xFF64748B), height: 1.4)),
+          ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              title: const Text('Detalhes da análise',
+                  style: TextStyle(fontSize: 12)),
+              children: [
+                Align(
+                    alignment: Alignment.centerLeft,
+                    child: SelectableText(
+                        'Modelo: ${_result!['model_version']}\nEntregas anteriores na rota: ${r['history']['route_orders']}\nEntregas do vendedor identificado: ${r['history']['seller_orders']}\nScore do modelo: ${(r['score'] as num).toStringAsFixed(5)}\nCorte preservado: ${(r['threshold'] as num).toStringAsFixed(5)}',
+                        style: const TextStyle(fontSize: 12))),
+                for (final w in _result!['warnings'] as List)
+                  Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(
+                          padding: const EdgeInsets.only(top: 5),
+                          child: Text('• $w',
+                              style: const TextStyle(fontSize: 11)))),
+              ]),
+        ]));
+  }
+
+  Widget _mapArea() =>
+      Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Container(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+            color: Theme.of(context).colorScheme.surface,
+            child: Row(children: [
+              const Icon(Icons.route, size: 18, color: Color(0xFF2563EB)),
+              const SizedBox(width: 10),
+              Expanded(
+                  child: Text(
+                      _origin == null || _destination == null
+                          ? 'Selecione de onde sai e para onde vai a entrega'
+                          : '${_origin!['city']} / ${_origin!['state']}  →  ${_destination!['city']} / ${_destination!['state']}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600, fontSize: 13))),
             ])),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancelar'))
-        ],
-      );
+        Expanded(
+            child: widget.active
+                ? LeafletMap(
+                    key: const ValueKey('forecast-leaflet'),
+                    blocked: _modal,
+                    config: {
+                        'mode': 'forecast',
+                        'origin': _result?['origin'] ?? _origin,
+                        'destination': _result?['destination'] ?? _destination,
+                        'risk': _result?['result']?['risk'],
+                        'fitToken': _fit,
+                      })
+                : const SizedBox.shrink()),
+      ]);
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(builder: (context, c) {
+        final sidebar = ColoredBox(
+            color: Theme.of(context).colorScheme.surface, child: _sidebar());
+        if (c.maxWidth < 900) {
+          return SingleChildScrollView(
+              child: Column(children: [
+            SizedBox(height: 430, child: _mapArea()),
+            sidebar,
+            _resultPanel()
+          ]));
+        }
+        return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          SizedBox(width: 350, child: sidebar),
+          const VerticalDivider(width: 1),
+          Expanded(
+              child: Column(children: [
+            Expanded(child: _mapArea()),
+            const Divider(height: 1),
+            ConstrainedBox(
+                constraints: BoxConstraints(
+                    maxHeight: _result == null ? 110 : c.maxHeight * .46),
+                child: SingleChildScrollView(child: _resultPanel())),
+          ])),
+        ]);
+      });
+}
+
+/// Busca coordenadas reais por CEP ou cidade; não depende de um pedido importado.
+class _LocationPicker extends StatefulWidget {
+  const _LocationPicker(
+      {super.key,
+      required this.label,
+      required this.api,
+      required this.value,
+      required this.enabled,
+      required this.onSelected});
+  final String label;
+  final MapScenariosApi api;
+  final Map<String, dynamic>? value;
+  final bool enabled;
+  final ValueChanged<Map<String, dynamic>?> onSelected;
+  @override
+  State<_LocationPicker> createState() => _LocationPickerState();
+}
+
+class _LocationPickerState extends State<_LocationPicker> {
+  final _text = TextEditingController();
+  Timer? _timer;
+  List<Map<String, dynamic>> _matches = [];
+  bool _busy = false;
+  String? _error;
+  int _request = 0;
+  String _label(Map<String, dynamic> p) =>
+      '${p['city']} / ${p['state']} · ${p['prefix5']}';
+  @override
+  void initState() {
+    super.initState();
+    if (widget.value != null) _text.text = _label(widget.value!);
+  }
+
+  @override
+  void didUpdateWidget(covariant _LocationPicker old) {
+    super.didUpdateWidget(old);
+    if (widget.value != null && widget.value != old.value) {
+      _text.text = _label(widget.value!);
+      _matches = [];
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _text.dispose();
+    super.dispose();
+  }
+
+  void _changed(String value) {
+    _timer?.cancel();
+    final id = ++_request;
+    widget.onSelected(null);
+    setState(() {
+      _matches = [];
+      _error = null;
+      _busy = value.trim().length >= 2;
+    });
+    if (value.trim().length < 2) return;
+    _timer = Timer(const Duration(milliseconds: 300), () async {
+      try {
+        final response = await widget.api.get('locations', {'q': value.trim()});
+        if (mounted && id == _request) {
+          setState(() {
+            _matches = (response['data'] as List)
+                .cast<Map<String, dynamic>>()
+                .take(5)
+                .toList();
+            _error = _matches.isEmpty
+                ? 'Nenhum CEP encontrado. Tente outra cidade ou prefixo.'
+                : null;
+          });
+        }
+      } catch (e) {
+        if (mounted && id == _request) setState(() => _error = e.toString());
+      } finally {
+        if (mounted && id == _request) setState(() => _busy = false);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        TextField(
+            controller: _text,
+            enabled: widget.enabled,
+            onChanged: _changed,
+            decoration: InputDecoration(
+                labelText: widget.label,
+                hintText: 'CEP com 5/8 dígitos ou cidade',
+                isDense: true,
+                border: const OutlineInputBorder(),
+                suffixIcon: widget.value != null
+                    ? const Icon(Icons.check_circle_outline,
+                        color: Color(0xFF15803D), size: 20)
+                    : const Icon(Icons.search, size: 20))),
+        if (_busy)
+          const Padding(
+              padding: EdgeInsets.only(top: 6),
+              child: LinearProgressIndicator(minHeight: 2)),
+        if (_error != null)
+          Padding(
+              padding: const EdgeInsets.only(top: 5),
+              child: Text(_error!,
+                  style:
+                      const TextStyle(fontSize: 11, color: Color(0xFFB45309)))),
+        for (final p in _matches)
+          ListTile(
+              dense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+              title: Text('${p['city']} / ${p['state']}',
+                  style: const TextStyle(fontSize: 12)),
+              subtitle: Text('CEP ${p['prefix5']}',
+                  style: const TextStyle(fontSize: 11)),
+              onTap: widget.enabled
+                  ? () {
+                      _timer?.cancel();
+                      _request++;
+                      setState(() {
+                        _matches = [];
+                        _text.text = _label(p);
+                      });
+                      widget.onSelected(p);
+                    }
+                  : null),
+      ]);
 }

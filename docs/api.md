@@ -10,6 +10,8 @@ Base local: `http://127.0.0.1:3001`. Serviço Python interno: `http://127.0.0.1:
 | GET | `/api/v1/model` | Versão, origem, features, limiar e métricas do treinamento |
 | POST | `/api/v1/predictions` | Classificação de um pedido no despacho |
 | GET | `/api/v1/analytics/states` | Pedidos e atrasos observados por UF |
+| GET | `/api/v1/map/locations?q=...` | Pesquisa de CEP/cidade no catálogo real |
+| POST | `/api/v1/map/forecast` | Risco de uma entrega planejada, sem pedido importado |
 | GET | `/api/v1/orders` | Lista paginada de pedidos importados |
 | POST | `/api/v1/orders/import` | Importa pedidos em lote |
 | GET | `/api/v1/orders/:orderId` | Consulta um pedido por ID |
@@ -188,6 +190,8 @@ A URL base é configurada via `--dart-define=API_BASE_URL=http://127.0.0.1:3001`
 
 O mapa com o modelo `modelo_564_filter` utiliza `GET /api/v1/map/catalog`,
 `GET /api/v1/map/orders`, `GET /api/v1/map/order?order_id=...`,
-`GET /api/v1/map/sellers?q=...` e `POST /api/v1/map/simulate`.
+`GET /api/v1/map/sellers?q=...` e `POST /api/v1/map/simulate` para pesquisa retrospectiva.
+O formulário de entrega futura usa `GET /api/v1/map/locations?q=...` e
+`POST /api/v1/map/forecast`, sem `order_id` e sem depender de um pedido importado.
 Não altera os contratos antigos de previsão nem persiste cenários como pedidos.
-[Filtros, campos, erros, critérios de risco e exemplos](mapa-e-demonstracao.md#api-e-testes).
+[Campos, erros, critérios de risco e exemplos](mapa-e-demonstracao.md#api).

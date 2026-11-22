@@ -57,7 +57,7 @@ async function makeHarness(t, { ordersCsv, customersCsv, geolocationCsv } = {}) 
     ));
     await rm(directory, { recursive: true, force: true });
   });
-  return { baseUrl };
+  return { baseUrl, olistOrdersFile };
 }
 
 const ordersHeader = '"order_id","customer_id","order_status","order_purchase_timestamp","order_approved_at","order_delivered_carrier_date","order_delivered_customer_date","order_estimated_delivery_date"';
@@ -534,4 +534,19 @@ test('orders-geography/regions — state breakdown included', async (t) => {
   assert.ok(rjState, 'RJ state should exist');
   assert.equal(spState.risk_level, 'baixo', 'SP should be baixo (0% delay)');
   assert.equal(rjState.risk_level, 'muito_alto', 'RJ should be muito_alto (100% delay)');
+});
+
+test('region cache reuses results and refreshes after the source CSV changes', async (t) => {
+  const rows=[ordersHeader,orderRow('a','customer','2018-01-10','2018-01-15')];
+  const {baseUrl,olistOrdersFile}=await makeHarness(t,{
+    ordersCsv:rows.join('\n'),customersCsv:[customersHeader,customerRow('customer','01001','sao paulo','SP')].join('\n'),
+    geolocationCsv:[geolocationHeader,geoRow('01001','-23.55','-46.63','sao paulo','SP')].join('\n'),
+  });
+  const uri=`${baseUrl}/api/v1/analytics/orders-geography/regions`;
+  const first=await (await fetch(uri)).json();
+  assert.deepEqual(await (await fetch(uri)).json(),first);
+  await writeFile(olistOrdersFile,[...rows,orderRow('b','customer','2018-01-20','2018-01-15')].join('\n'));
+  const second=await (await fetch(uri)).json();
+  const southeast=second.data.find(r=>r.region==='Sudeste');
+  assert.equal(southeast.total_orders,2);assert.equal(southeast.delayed_orders,1);
 });

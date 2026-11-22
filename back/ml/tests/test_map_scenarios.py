@@ -247,3 +247,113 @@ def test_catalog_and_sellers_do_not_fabricate_identities(client):
         ]
         == []
     )
+
+
+@pytest.fixture
+def future_order():
+    return {
+        "purchase_at": "2026-12-23T09:00:00",
+        "dispatched_at": "2026-12-24T15:00:00",
+        "estimated_delivery_at": "2027-01-04T18:00:00",
+        "origin_prefix5": "01001",
+        "destination_prefix5": "20040",
+        "total_weight_g": 500.0,
+        "total_volume_cm3": 1200.0,
+        "items_count": 1,
+        "price": 100.0,
+        "freight_value": 20.0,
+    }
+
+
+def test_future_order_is_independent_of_any_historical_order(client, future_order):
+    response = client.post("/map/forecast", json=future_order)
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["scenario_type"] == "future_order" and "order_id" not in data
+    assert data["model_version"] == "modelo_564_filter"
+    assert (
+        data["shipment"]["seller_id"] is None
+        and data["result"]["history"]["seller_orders"] == 0
+    )
+    assert data["result"]["history"]["route_orders"] > 0
+    assert data["origin"]["state"] == "SP" and data["destination"]["state"] == "RJ"
+    assert data["shipment"]["distance_km"] > 300
+    assert any(
+        h["name"] == "Natal" for h in data["calendar"]["fixed_national_holidays"]
+    )
+    assert any("Sem identificador" in w for w in data["warnings"])
+    assert any("não há histórico recente" in w for w in data["warnings"])
+    raw = engine().contract.model_validate(data["shipment"]).model_dump()
+    original_score = engine().pipeline.predict_proba(pd.DataFrame([raw]))[0, 1]
+    assert data["result"]["score"] == pytest.approx(original_score, abs=1e-12)
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"dispatched_at": "2026-12-22T10:00:00"},
+        {"purchase_at": "2026-12-23T09:00:00Z"},
+        {"origin_prefix5": "00000"},
+        {"destination_prefix5": "00000"},
+        {"seller_id": "inventado"},
+        {"items_count": 0},
+        {"total_weight_g": True},
+        {"total_weight_g": -1},
+        {"atraso_real": True},
+        {"order_id": "nao-usar-pedido-antigo"},
+    ],
+)
+def test_future_order_validates_real_locations_and_prevents_label_leakage(
+    client, future_order, changes
+):
+    assert (
+        client.post("/map/forecast", json={**future_order, **changes}).status_code
+        == 422
+    )
+
+
+def test_location_search_handles_accents_and_full_postal_code(client):
+    rows = client.get("/map/locations", params={"q": "São Paulo SP"}).json()["data"]
+    assert rows and all(
+        p["state"] == "SP" and p["prefix5"] in engine().locations.index for p in rows
+    )
+    exact = client.get("/map/locations", params={"q": "01001-000"}).json()["data"]
+    assert exact and all(p["prefix5"] == "01001" for p in exact)
+    assert (
+        client.get("/map/locations", params={"q": "cidade-inexistente-xyz"}).json()[
+            "data"
+        ]
+        == []
+    )
+
+
+def test_future_order_rejects_seller_from_another_origin(client, future_order):
+    other = engine().sellers[engine().sellers.prefix5.ne("01001")].iloc[0]
+    response = client.post(
+        "/map/forecast", json={**future_order, "seller_id": other.seller_id}
+    )
+    assert response.status_code == 422 and "corresponde" in response.json()["detail"]
+
+
+def test_postal_search_does_not_load_predictive_model(client, monkeypatch):
+    import logipredict.map_scenarios as maps
+
+    def forbidden():
+        raise AssertionError("A busca de CEP não deve inicializar o modelo.")
+
+    monkeypatch.setattr(maps, "engine", forbidden)
+    assert client.get("/map/locations", params={"q": "01001"}).status_code == 200
+
+
+def test_future_prediction_does_not_load_retrospective_evaluation_rows(
+    client, future_order, monkeypatch
+):
+    import logipredict.map_scenarios as maps
+
+    def forbidden(_):
+        raise AssertionError(
+            "Não consultar pedidos da avaliação para prever um pedido futuro."
+        )
+
+    monkeypatch.setattr(maps.MapEngine, "rows", property(forbidden))
+    assert client.post("/map/forecast", json=future_order).status_code == 200

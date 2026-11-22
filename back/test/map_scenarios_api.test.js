@@ -35,4 +35,9 @@ test('map proxy preserves filters, scenarios, validation and availability errors
   assert.equal((await fetch(`${base}/order?order_id=missing`)).status, 404);
   assert.equal((await fetch(`${base}/orders?risk=offline`)).status, 503);
   assert.equal((await fetch(`${base}/simulate`, { method: 'POST', body: 'invalid' })).status, 415);
+  const future={purchase_at:'2026-12-23T09:00:00',origin_prefix5:'01001',destination_prefix5:'20040'};
+  assert.equal((await fetch(`${base}/forecast`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(future)})).status,200);
+  assert.equal(calls.at(-1).url,'/map/forecast');assert.deepEqual(calls.at(-1).body,future);
+  await fetch(`${base}/locations?q=01001-000`);
+  assert.equal(calls.at(-1).url,'/map/locations?q=01001-000');
 });

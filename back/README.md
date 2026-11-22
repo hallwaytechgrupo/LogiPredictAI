@@ -2,11 +2,12 @@
 
 ## Mapa com o modelo final
 
-A vista **Mapa de Calor Logístico → Pesquisa e simulação** usa o modelo
+A vista **Mapa de Calor Logístico → Simular nova entrega** usa o modelo
 564 + filtro contextual, com os dois notebooks finais preservados na pasta
 `ML/modelos_finais`. Instale as dependências de `back/ml/requirements-docker.txt`,
 incluindo CatBoost, e inicie os três serviços habituais. As novas rotas são
-`GET /api/v1/map/{catalog,orders,order,sellers}` e `POST /api/v1/map/simulate`.
+`GET /api/v1/map/locations` e `POST /api/v1/map/forecast`, com os dados completos
+de uma compra futura. Não é necessário selecionar um pedido antigo.
 Os fluxos anteriores continuam disponíveis. [Guia completo](../docs/mapa-e-demonstracao.md).
 
 Para demonstrar FE-04 e BE-02, importe `back/data/exemplos_fe04_be02.csv` pela aba Pedidos. O arquivo contém cinco pedidos fictícios identificados pelo prefixo `DEMO-FE04-`, com datas, pesos e status logísticos informados. A tabela e os detalhes exibem entrega prometida e status. O Simulador Logístico busca o detalhe completo ao selecionar um pedido importado. [Contrato e status aceitos](../docs/api.md#listagem-de-pedidos).

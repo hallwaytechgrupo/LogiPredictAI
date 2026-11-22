@@ -17,7 +17,7 @@ import express from 'express';
 import helmet from 'helmet';
 import { randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
@@ -256,7 +256,26 @@ export async function createApp({
     return 'muito_alto';
   }
 
-  async function loadOrdersDataset() {
+  // Os CSVs públicos são imutáveis entre consultas. Releitura só se o arquivo mudar.
+  const geographyDatasetCache = new Map();
+  let regionCache;
+  async function cachedGeographyDataset(filename, loader) {
+    const info = await stat(filename);
+    const signature = `${info.mtimeMs}:${info.ctimeMs}:${info.size}`;
+    const cached = geographyDatasetCache.get(filename);
+    if (cached?.signature === signature) return cached.promise;
+    const entry = { signature, promise: null };
+    entry.promise = loader().catch((error) => {
+      if (geographyDatasetCache.get(filename) === entry) geographyDatasetCache.delete(filename);
+      throw error;
+    });
+    geographyDatasetCache.set(filename, entry);
+    return entry.promise;
+  }
+  function loadOrdersDataset() { return cachedGeographyDataset(olistOrdersFile, readOrdersDataset); }
+  function loadCustomersDataset() { return cachedGeographyDataset(olistCustomersFile, readCustomersDataset); }
+
+  async function readOrdersDataset() {
     const orders = [];
     const stream = createReadStream(olistOrdersFile, { encoding: 'utf8' });
     const lines = createInterface({ input: stream, crlfDelay: Infinity });
@@ -279,7 +298,7 @@ export async function createApp({
     return orders;
   }
 
-  async function loadCustomersDataset() {
+  async function readCustomersDataset() {
     const customers = new Map();
     const stream = createReadStream(olistCustomersFile, { encoding: 'utf8' });
     const lines = createInterface({ input: stream, crlfDelay: Infinity });
@@ -596,13 +615,14 @@ export async function createApp({
   app.get('/api/v1/analytics/states', proxy('/analytics/states'));
 
   // O mapa usa os pesos 564 + filtro, sem gravar cenários como pedidos operacionais.
-  for (const resource of ['catalog', 'orders', 'order', 'sellers']) {
+  for (const resource of ['catalog', 'orders', 'order', 'sellers', 'locations']) {
     app.get(`/api/v1/map/${resource}`, (req, res) => {
       const query = new URL(req.originalUrl, 'http://localhost').search;
       return proxy(`/map/${resource}${query}`)(req, res);
     });
   }
   app.post('/api/v1/map/simulate', proxy('/map/simulate', 'POST'));
+  app.post('/api/v1/map/forecast', proxy('/map/forecast', 'POST'));
 
   // Agregação de previsões por hub logístico com deduplicação por order_id.
   // Filtra por período (start_date, end_date) e hub_id opcional.
@@ -1938,6 +1958,7 @@ export async function createApp({
         loadOrdersDataset(),
         loadCustomersDataset(),
       ]);
+      if (regionCache?.orders === orders && regionCache.customers === customers) return res.json(regionCache.payload);
 
       // Build a set of seen order IDs to avoid duplication
       const seenOrderIds = new Set();
@@ -2064,7 +2085,9 @@ export async function createApp({
         });
       }
 
-      return res.json({ data, total: data.length });
+      const payload = { data, total: data.length };
+      regionCache = { orders, customers, payload };
+      return res.json(payload);
     } catch (error) {
       console.error('Falha ao agregar regiões de pedidos:', error.message);
       return res.status(500).json({

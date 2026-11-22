@@ -15,7 +15,6 @@ import '../services/dispatch_simulation.dart';
 import '../services/dispatch_api.dart';
 import '../services/logipredict_api.dart';
 import '../services/hubs_api.dart';
-import '../services/hub_analytics_api.dart';
 import '../services/orders_api.dart';
 import '../services/orders_geography_api.dart';
 import '../services/orders_region_api.dart';
@@ -23,7 +22,7 @@ import '../widgets/hub_risk_layer_unavailable.dart';
 import '../widgets/logistics_heat_map.dart';
 import 'hubs_management_screen.dart';
 import 'orders_screen.dart';
-import 'prediction_map_screen.dart';
+import 'map_workspace_screen.dart';
 
 part 'dashboard_simulator_screen.dart';
 part 'dashboard_map_screen.dart';
@@ -75,16 +74,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final _declaredValueController = TextEditingController();
   final _freightValueController = TextEditingController();
   final HubsApi _hubsApi = HubsApi();
-  final HubAnalyticsApi _hubAnalyticsApi = HubAnalyticsApi();
   final OrdersApi _ordersApi = OrdersApi();
   List<LogisticHub> _mapHubs = [];
-  bool _loadingMapHubs = true;
+  bool _loadingMapHubs = false;
   String? _mapHubsError;
-  Map<String, HubRiskAggregate> _mapHubRisk = {};
-  int _mapHubRiskTotal = 0;
-  bool _loadingHubRisk = false;
-  String? _hubRiskError;
-  bool _showHubRiskLayer = true;
   double? _riskProbability;
   bool? _predictedLate;
   String _riskTitle = 'Aguardando análise';
@@ -124,7 +117,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _loadingRegions = false;
   String? _regionError;
   bool _showHubLayer = true;
-  bool _mapOpened = false;
 
   void _setMapHubLayer(bool value) {
     setState(() => _showHubLayer = value);
@@ -151,46 +143,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _loadAnalytics();
-    _loadMapHubs();
-    _loadRegions();
   }
 
   Future<void> _loadMapHubs() async {
     setState(() {
       _loadingMapHubs = true;
       _mapHubsError = null;
-      _loadingHubRisk = true;
-      _hubRiskError = null;
     });
     List<LogisticHub> hubs = _mapHubs;
     String? hubsError;
-    Map<String, HubRiskAggregate> risk = _mapHubRisk;
-    var riskTotal = _mapHubRiskTotal;
-    String? riskError;
     try {
       hubs = await _hubsApi.list(includeInactive: true);
     } catch (e) {
       hubsError = e.toString();
       hubs = [];
     }
-    try {
-      final response = await _hubAnalyticsApi.list();
-      risk = indexHubRiskAggregates(response.data);
-      riskTotal = response.total;
-    } catch (e) {
-      riskError = e.toString();
-      risk = {};
-      riskTotal = 0;
-    }
     if (!mounted) return;
     setState(() {
       _mapHubs = hubs;
       _mapHubsError = hubsError;
       _loadingMapHubs = false;
-      _mapHubRisk = risk;
-      _mapHubRiskTotal = riskTotal;
-      _hubRiskError = riskError;
-      _loadingHubRisk = false;
     });
     // Note: the LogisticsHeatMap widget manages its own MapController,
     // so we no longer call _mapController.move/fitCamera here.
@@ -225,10 +197,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         });
       }
     }
-  }
-
-  void _setHubRiskLayerEnabled(bool enabled) {
-    setState(() => _showHubRiskLayer = enabled);
   }
 
   Future<void> _loadOrderGeography({String? state}) async {
@@ -1296,13 +1264,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 final wasOnOrders = _tab == 2;
                 setState(() {
                   _tab = i;
-                  if (i == 1) _mapOpened = true;
                 });
                 if (i == 1 &&
                     !wasOnMap &&
-                    !_loadingMapHubs &&
-                    !_loadingHubRisk) {
+                    !_loadingMapHubs) {
                   _loadMapHubs();
+                  if (_regionOrderData.isEmpty && !_loadingRegions) _loadRegions();
                 }
                 // Refresh OrdersScreen when navigating to it
                 if (i == 2 && !wasOnOrders) {
