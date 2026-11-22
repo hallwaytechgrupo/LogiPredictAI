@@ -1,3 +1,113 @@
+# LogiPredict AI — versão integrada
+
+Plataforma acadêmica para pesquisar entregas e apoiar o acompanhamento de risco
+de atraso no e-commerce, com dados históricos reais da Olist. Flutter Web,
+Node.js e Python/FastAPI, com modelos treinados offline.
+
+O código completo parte da `main`. A entrega do novo mapa está na branch
+`codex/mapa-simulacoes-final`, que reúne essa aplicação e os dois modelos finais.
+A `machineLearning` mantém a pesquisa e a publicação dos modelos.
+
+[Guia do mapa e demonstração](docs/mapa-e-demonstracao.md) ·
+[Preparação da ABP e da feira](docs/entrega-final-abp.md) ·
+[API](docs/api.md) · [Notebooks finais](ML/modelos_finais/LEIA_ME.md).
+
+## Recursos atuais
+
+- Simulador logístico, importação de pedidos, indicadores e cadastro de hubs.
+- Pesquisa no mapa por data de compra, origem, destino, região, CEP, ID e risco.
+- Comparação de cenários com o **modelo 564 + filtro CatBoost**, preservado.
+- Mapa de regiões e pontos locais disponível sem internet; ruas são opcionais.
+- Validações, estados de carregamento/erro e testes nas três camadas.
+- PostgreSQL com fallback JSON nos fluxos operacionais existentes.
+
+## Iniciar no VS Code / PowerShell
+
+Pré-requisitos: Python 3.12, Node.js 22+ e Flutter. Na raiz do repositório,
+instale as dependências uma vez, mantendo a `.venv` se ela já existe:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r back\ml\requirements-docker.txt
+npm.cmd ci --prefix back
+cd flutter_app
+flutter pub get
+```
+
+Abra três terminais, **cada um começando na raiz**:
+
+**Terminal 1 — Python**
+
+```powershell
+cd back\ml
+..\..\.venv\Scripts\python.exe -m uvicorn logipredict.service:app --host 127.0.0.1 --port 8000
+```
+
+**Terminal 2 — Node.js**
+
+```powershell
+cd back
+npm.cmd start
+```
+
+**Terminal 3 — Flutter**
+
+```powershell
+cd flutter_app
+flutter run -d chrome --web-port 8080 --dart-define=API_BASE_URL=http://127.0.0.1:3001
+```
+
+Abra [a aplicação local](http://localhost:8080) e entre em **Mapa de Calor
+Logístico → Pesquisa e simulação**. O período inicial é de 2018, pois corresponde
+à amostra histórica disponível. **Histórico por região** preserva o mapa anterior.
+Os pesos e o catálogo estão versionados; o novo mapa não exige retreinamento,
+download dos CSVs originais ou PostgreSQL. Encerre instâncias anteriores antes
+de reiniciar nas mesmas portas.
+
+## Resultado do modelo do novo mapa
+
+| Resultado retrospectivo | Modelo 564 + filtro |
+| --- | ---: |
+| Pedidos avaliados / atrasos reais | 19.258 / 704 |
+| Atrasos encontrados / não detectados | 564 / 140 |
+| Falsos alertas / entregas no prazo sem alerta | 4.358 / 14.196 |
+| Recall / precisão dos alertas | 80,11% / 11,46% |
+
+Dos 564, **434 foram antecipações e 130 já estavam vencidos no despacho**.
+O score não é uma probabilidade calibrada. O teste final foi consultado durante
+as pesquisas anteriores: o resultado é exploratório, sem comprovar desempenho
+em uma operação nova. A base é de 2016–2018 e não identifica transportadora.
+
+As faixas baixo/médio/alto representam as duas etapas da decisão: sem alerta
+inicial, alerta retirado pelo filtro e alerta mantido. Feriados são contexto do
+calendário; este modelo não usa feriado como atributo explícito. Renegociar um
+prazo não acelera a entrega física. A simulação não altera pedidos salvos.
+
+O modelo alternativo de 613 atrasos e 6.774 falsos alertas está preservado para
+comparação. O novo mapa utiliza exclusivamente `modelo_564_filter`; as rotas
+antigas mantêm seu contrato e modelo original.
+
+## Testar
+
+```powershell
+$env:PYTHONPATH = 'back/ml'
+.\.venv\Scripts\python.exe -m pytest back/ml/tests -q
+npm.cmd test --prefix back
+cd flutter_app
+flutter test
+```
+
+O teste do mapa reproduz todas as previsões preservadas e verifica a matriz
+564/4358/140/14196. Há testes de filtros, cenários, isolamento temporal e
+regressão nas telas existentes. Testes com PostgreSQL e builds Docker/Mobile
+exigem homologação própria.
+
+<details>
+<summary>Documentação original da Sprint 1 — registro histórico</summary>
+
+Os comandos e o estado das funcionalidades abaixo registram a primeira etapa.
+Para executar e apresentar a aplicação atual, use os guias acima.
+
 <div align="center">
 
 # 📦 LogiPredict AI
@@ -226,3 +336,5 @@ O projeto adota **Scrum**, com backlog priorizado, entregas incrementais, acompa
 | Vinicius Lemmes | Desenvolvedor | [@viniilemes](https://github.com/viniilemes) |
 
 **Professor Focal Point:** Leandro Toss Hoffmann.
+
+</details>

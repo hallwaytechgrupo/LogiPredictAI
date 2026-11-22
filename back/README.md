@@ -1,5 +1,14 @@
 # Cadastro de hubs
 
+## Mapa com o modelo final
+
+A vista **Mapa de Calor Logístico → Pesquisa e simulação** usa o modelo
+564 + filtro contextual, com os dois notebooks finais preservados na pasta
+`ML/modelos_finais`. Instale as dependências de `back/ml/requirements-docker.txt`,
+incluindo CatBoost, e inicie os três serviços habituais. As novas rotas são
+`GET /api/v1/map/{catalog,orders,order,sellers}` e `POST /api/v1/map/simulate`.
+Os fluxos anteriores continuam disponíveis. [Guia completo](../docs/mapa-e-demonstracao.md).
+
 Para demonstrar FE-04 e BE-02, importe `back/data/exemplos_fe04_be02.csv` pela aba Pedidos. O arquivo contém cinco pedidos fictícios identificados pelo prefixo `DEMO-FE04-`, com datas, pesos e status logísticos informados. A tabela e os detalhes exibem entrega prometida e status. O Simulador Logístico busca o detalhe completo ao selecionar um pedido importado. [Contrato e status aceitos](../docs/api.md#listagem-de-pedidos).
 
 `POST /predict` implementa o BE-03 com peso em gramas (`total_weight_g`), distância Haversine em quilômetros (`distance_km`) e prazo restante em dias de calendário (`remaining_days`). Retorna Baixo, Médio ou Alto a partir dos percentis de transporte de 53.327 pedidos reais da Olist. [Contrato, regras, fonte e reprodução](../docs/be-03-predict.md).

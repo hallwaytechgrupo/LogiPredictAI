@@ -1,5 +1,24 @@
 # Validação da entrega
 
+## Mapa integrado — 22/11/2026
+
+- Python: 41 testes aprovados, incluindo reprodução integral das 19.258
+  previsões do modelo final e a matriz TP=564, FP=4358, FN=140, TN=14196.
+- Node.js: 158 casos, 157 aprovados e 1 ignorado. Os caminhos dependentes de
+  PostgreSQL indisponível não foram homologados; os testes de API usam fallback JSON.
+- Flutter: 67 testes aprovados. Após o ajuste de CEP de 8 dígitos, os 7 testes
+  diretamente relacionados ao mapa e à integração de pedidos foram repetidos e aprovados.
+- Ruff nos novos módulos Python e análise estática dos novos arquivos Dart:
+  sem problemas. O código legado ainda tem avisos de análise estática.
+- Dependências Python: `pip check` sem requisitos quebrados.
+- Os builds Docker/Mobile e uma instalação limpa em outro computador não
+  foram homologados nesta etapa. Não há alegação de CI remota aprovada.
+
+[Guia atual, comandos e cenários](mapa-e-demonstracao.md) ·
+[Pendências para a ABP e a feira](entrega-final-abp.md).
+
+## Registro histórico da primeira entrega
+
 Ambiente local de 20/10/2026: Windows, Python 3.13.4, Node.js 22.14.0 e npm 11.2.0. Dependências diretas em `pyproject.toml`, ambiente Python em `requirements.lock` e resolução Node em `api/package-lock.json`.
 
 ## Dados reais

@@ -10,7 +10,6 @@ library;
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:flutter_map_geojson2/flutter_map_geojson2.dart';
 import 'package:latlong2/latlong.dart';
 import '../services/dispatch_simulation.dart';
 import '../services/dispatch_api.dart';
@@ -24,6 +23,7 @@ import '../widgets/hub_risk_layer_unavailable.dart';
 import '../widgets/logistics_heat_map.dart';
 import 'hubs_management_screen.dart';
 import 'orders_screen.dart';
+import 'prediction_map_screen.dart';
 
 part 'dashboard_simulator_screen.dart';
 part 'dashboard_map_screen.dart';
@@ -124,6 +124,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _loadingRegions = false;
   String? _regionError;
   bool _showHubLayer = true;
+  bool _mapOpened = false;
+
+  void _setMapHubLayer(bool value) {
+    setState(() => _showHubLayer = value);
+  }
 
   @override
   void dispose() {
@@ -1226,7 +1231,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Icon(Icons.circle, size: 9, color: Color(0xFF34D399)),
                   SizedBox(width: 5),
                   Text(
-                    'Modelo v1.4 Ativo',
+                    'Modelos Olist',
                     style: TextStyle(fontSize: 12, color: Color(0xFF6EE7B7)),
                   ),
                 ],
@@ -1289,7 +1294,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               onTap: () {
                 final wasOnMap = _tab == 1;
                 final wasOnOrders = _tab == 2;
-                setState(() => _tab = i);
+                setState(() {
+                  _tab = i;
+                  if (i == 1) _mapOpened = true;
+                });
                 if (i == 1 &&
                     !wasOnMap &&
                     !_loadingMapHubs &&

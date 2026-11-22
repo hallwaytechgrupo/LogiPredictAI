@@ -183,3 +183,11 @@ curl 'http://localhost:3001/api/v1/orders/ID_DO_PEDIDO'
 ### Configuração Flutter
 
 A URL base é configurada via `--dart-define=API_BASE_URL=http://127.0.0.1:3001`. No Android emulador, use `http://10.0.2.2:3001` para acessar o host.
+
+## Pesquisa e simulação no mapa
+
+O mapa com o modelo `modelo_564_filter` utiliza `GET /api/v1/map/catalog`,
+`GET /api/v1/map/orders`, `GET /api/v1/map/order?order_id=...`,
+`GET /api/v1/map/sellers?q=...` e `POST /api/v1/map/simulate`.
+Não altera os contratos antigos de previsão nem persiste cenários como pedidos.
+[Filtros, campos, erros, critérios de risco e exemplos](mapa-e-demonstracao.md#api-e-testes).

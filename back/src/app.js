@@ -568,10 +568,13 @@ export async function createApp({
         });
         const payload = await upstream.json();
         if (upstream.status === 422) {
-          const details = (payload.detail ?? []).map(({ loc, msg, type }) => ({ field: loc, message: msg, type }));
-          return res.status(422).json({ error: 'VALIDATION_ERROR', details });
+          const details = Array.isArray(payload.detail)
+            ? payload.detail.map(({ loc, msg, type }) => ({ field: loc, message: msg, type })) : [];
+          const message = typeof payload.detail === 'string' ? payload.detail : 'Revise os dados informados.';
+          return res.status(422).json({ error: 'VALIDATION_ERROR', message, details });
         }
-        if (upstream.status === 503) return res.status(503).json({ error: 'MODEL_UNAVAILABLE', message: 'Treine o modelo e reinicie o serviço Python.' });
+        if (upstream.status === 404) return res.status(404).json({ error: 'NOT_FOUND', message: 'Pedido não encontrado.' });
+        if (upstream.status === 503) return res.status(503).json({ error: 'MODEL_UNAVAILABLE', message: typeof payload.detail === 'string' ? payload.detail : 'Confira os artefatos do modelo e reinicie o serviço Python.' });
         if (!upstream.ok) return res.status(502).json({ error: 'ML_ERROR', message: 'Falha no serviço de previsão.' });
         return res.json(payload);
       } catch (error) {
@@ -591,6 +594,15 @@ export async function createApp({
   app.get('/ready', proxy('/health'));
   app.get('/api/v1/model', proxy('/model'));
   app.get('/api/v1/analytics/states', proxy('/analytics/states'));
+
+  // O mapa usa os pesos 564 + filtro, sem gravar cenários como pedidos operacionais.
+  for (const resource of ['catalog', 'orders', 'order', 'sellers']) {
+    app.get(`/api/v1/map/${resource}`, (req, res) => {
+      const query = new URL(req.originalUrl, 'http://localhost').search;
+      return proxy(`/map/${resource}${query}`)(req, res);
+    });
+  }
+  app.post('/api/v1/map/simulate', proxy('/map/simulate', 'POST'));
 
   // Agregação de previsões por hub logístico com deduplicação por order_id.
   // Filtra por período (start_date, end_date) e hub_id opcional.

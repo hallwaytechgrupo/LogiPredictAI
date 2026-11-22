@@ -1,0 +1,14 @@
+{
+  "source": "olist",
+  "locations": 19011,
+  "sellers": 3095,
+  "coordinates": "Median of distinct valid Olist geolocation rows by five-digit ZIP prefix",
+  "raw_sha256": {
+    "olist_geolocation_dataset.csv": "3b7cf4f504ce3fbb3e63693f48d20ac4a4925619720e2ed46aba2f9801260876",
+    "olist_sellers_dataset.csv": "c877ee451aadbec30ddc58542c12b87685703f9c8a2ba410fb3087336ac65d4a"
+  },
+  "sha256": {
+    "locations.csv.gz": "6e82ad0d39808df319d9c47a49c0379ae153aa911162be6ffdbdc56354355745",
+    "sellers.csv.gz": "510420423495644d7c65435690befd5427320eee0f836114bb1b947e5aab2b53"
+  }
+}

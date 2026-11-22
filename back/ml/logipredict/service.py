@@ -19,6 +19,7 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException
 
 from .schema import Shipment, feature_frame
+from .map_scenarios import router as map_router
 
 
 def create_app(model_dir=None):
@@ -52,6 +53,7 @@ def create_app(model_dir=None):
         yield
 
     app = FastAPI(title="LogiPredict ML — serviço interno", version="0.1.0", lifespan=lifespan)
+    app.include_router(map_router)
 
     def bundle():
         """Retorna o modelo carregado ou levanta HTTP 503 se ausente."""
