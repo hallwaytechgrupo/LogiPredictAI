@@ -1,0 +1,10 @@
+numpy==2.2.6
+pandas==2.2.3
+scipy==1.18.1
+scikit-learn==1.9.1
+joblib==1.4.2
+catboost==1.2.10
+xgboost==3.4.1
+matplotlib==3.11.2
+pydantic==2.11.4
+ipykernel==7.4.0
