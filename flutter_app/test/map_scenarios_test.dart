@@ -165,8 +165,19 @@ void main() {
       }
       return jsonResponse({'data': []});
     }));
-    await tester.pumpWidget(
-        MaterialApp(home: Scaffold(body: PredictionMapScreen(api: api))));
+    await tester.pumpWidget(MaterialApp(
+        home: DefaultTabController(
+      length: 2,
+      child: Scaffold(
+          body: Column(children: [
+        const TabBar(tabs: [Tab(text: 'Pesquisa'), Tab(text: 'Histórico')]),
+        Expanded(
+            child: TabBarView(children: [
+          PredictionMapScreen(api: api),
+          const Text('Histórico exibido')
+        ])),
+      ])),
+    )));
     await tester.pumpAndSettle();
     expect(find.text('1 pedidos encontrados'), findsOneWidget);
     await tester.tap(find.text('Exemplos: Alto'));
@@ -191,6 +202,19 @@ void main() {
     expect(find.text('Score não calibrado.'),
         findsNothing); // Está identificado como aviso, não como probabilidade.
     expect(find.text('Aviso: Score não calibrado.'), findsOneWidget);
+    await tester.tap(find.text('Histórico'));
+    await tester.pumpAndSettle();
+    expect(find.text('Histórico exibido'), findsOneWidget);
+    await tester.tap(find.text('Pesquisa'));
+    await tester.pumpAndSettle();
+    expect(find.text('Resultado do cenário informado'), findsOneWidget);
+    expect(
+        tester
+            .widget<TextFormField>(
+                find.byKey(const ValueKey('scenario-destination')))
+            .controller!
+            .text,
+        '20040-002');
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
     api.close();

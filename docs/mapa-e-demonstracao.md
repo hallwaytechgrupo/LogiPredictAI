@@ -135,8 +135,16 @@ cd back\ml
 
 ```powershell
 cd back
+$env:HUBS_FILE = 'data/hubs/hubs.json'
+$env:ORDERS_FILE = 'data/hubs/orders.json'
+$env:PREDICTIONS_FILE = 'data/hubs/predictions.json'
+$env:PREDICTIONS_JOURNAL_FILE = 'data/hubs/predictions.jsonl'
 npm.cmd start
 ```
+
+As variáveis acima apontam para os cadastros já incluídos no repositório,
+nos mesmos arquivos usados pelo volume Docker. Se você utiliza outros arquivos
+de dados, mantenha seus caminhos habituais nessas variáveis.
 
 **Terminal 3 — Flutter**, partindo da raiz:
 

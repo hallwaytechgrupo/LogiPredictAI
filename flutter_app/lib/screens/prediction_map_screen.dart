@@ -15,7 +15,10 @@ class PredictionMapScreen extends StatefulWidget {
   State<PredictionMapScreen> createState() => _PredictionMapScreenState();
 }
 
-class _PredictionMapScreenState extends State<PredictionMapScreen> {
+class _PredictionMapScreenState extends State<PredictionMapScreen>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
   late final MapScenariosApi _api = widget.api ?? MapScenariosApi();
   final _map = MapController();
   final _form = GlobalKey<FormState>();
@@ -642,7 +645,8 @@ class _PredictionMapScreenState extends State<PredictionMapScreen> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('Simular este pedido',
               key: _scenarioAnchor,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              style:
+                  const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           SelectableText('Pedido: ${_selected!['order_id']}'),
           _badge(_selected!['risk'] as String),
@@ -792,6 +796,7 @@ class _PredictionMapScreenState extends State<PredictionMapScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (_catalog == null) {
       return Center(
