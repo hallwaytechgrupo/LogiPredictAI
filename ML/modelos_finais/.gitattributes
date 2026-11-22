@@ -1,0 +1,6 @@
+artefatos/** -text
+dados/** -text
+*.ipynb text eol=lf
+codigo/**/*.py text eol=lf
+requirements.txt text eol=lf
+LEIA_ME.md text eol=lf

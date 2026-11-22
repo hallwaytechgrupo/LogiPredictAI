@@ -1,0 +1,83 @@
+{
+  "version": "modelo_564_filter",
+  "source": "olist",
+  "synthetic": false,
+  "threshold": 0.03386708589440988,
+  "trained_asof": "2018-05-29 12:04:00",
+  "metrics": {
+    "TP": 564,
+    "FP": 4358,
+    "FN": 140,
+    "TN": 14196,
+    "recall": 0.8011363636363636,
+    "precision": 0.11458756603006907,
+    "FPR": 0.23488196615285115,
+    "ROC_AUC": 0.8369205794878831,
+    "AP": 0.46193341532281196,
+    "name": "modelo_564_filter",
+    "reference": "modelo_564",
+    "variant": "filter",
+    "threshold": 0.03386708589440988,
+    "known_overdue_TP": 130,
+    "anticipated_TP": 434,
+    "removed_FP": 6.0,
+    "lost_TP": 0.0,
+    "recovered_TP": 0.0,
+    "added_FP": 0.0,
+    "spec": "cb350_d6",
+    "context": true
+  },
+  "activated": false,
+  "probability_calibrated": false,
+  "input_contract": "raw Shipment + optional seller_id, origin_prefix5, destination_prefix5",
+  "history_protocol": "Prequential: only completed deliveries strictly before each prediction; no test labels used to adjust weights or thresholds.",
+  "history_population": "Olist eligible eventually-delivered cohort; excludes open/cancelled orders from evaluation.",
+  "raw_manifest": {
+    "quality": {
+      "raw_orders": 99441,
+      "eligible_orders": 96281,
+      "late_orders": 6531,
+      "late_rate": 0.06783269804011176,
+      "sellers": 3095,
+      "orders_with_missing_measure": 503,
+      "multiple_seller_orders": 1252,
+      "geo_rows_filtered_after_dedup": 25
+    },
+    "manifest": [
+      {
+        "table": "orders",
+        "rows": 99441,
+        "sha256": "8df58ef3d2d7e9944010f7beecd9b75367f5588ec6e3c91cec19ae3345ef9ecf"
+      },
+      {
+        "table": "order_items",
+        "rows": 112650,
+        "sha256": "0bc4d068c4fe38cbb01bd90e8746e3c613fe7b4baef75fab7b0e329701c3e279"
+      },
+      {
+        "table": "customers",
+        "rows": 99441,
+        "sha256": "983a422239e1712ded753b3bf9ecf47dc73f144d306029dcfa99e70a226883d2"
+      },
+      {
+        "table": "products",
+        "rows": 32951,
+        "sha256": "3e6569628a17fbc75fd206ee357b59e20364b9afa90f5b6cd5b4d624c58aa9cc"
+      },
+      {
+        "table": "sellers",
+        "rows": 3095,
+        "sha256": "1f643d2b950373b85735e7794b20986f528d7a000432e7c6f9bcbb44d0846a0e"
+      },
+      {
+        "table": "geolocation",
+        "rows": 1000163,
+        "sha256": "b514f6fc991b9566aeba02aa5d67e2c3630f034b60a0e05aa0d082a3b66d88d6"
+      }
+    ],
+    "dataset_commit": "8fbdf36cc75da4befa2c81a726bbbcf646205ed0"
+  },
+  "evaluation": "Exploratory retrospective benchmark; final period reused in earlier research.",
+  "integration": "Enriched service required; existing main frame of 13 attributes cannot supply seller/ZIP history.",
+  "score_meaning": "Conditional alert score for filter variants; do not interpret as calibrated population probability."
+}

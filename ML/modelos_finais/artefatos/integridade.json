@@ -1,0 +1,11 @@
+{
+  "artefatos/Modelo_564_atrasos_4358_falsos_alertas_140_perdidos.joblib": "e1868e310ee9592f02595439b9723013d40bab0e07454699349d653c91c4f57b",
+  "artefatos/Modelo_564_atrasos_4358_falsos_alertas_140_perdidos.json": "c22da2110d09e9ae5bf94f0b7bc2a52d45e5fa6a13d55e71a579e9211fe9e930",
+  "artefatos/Modelo_613_atrasos_6774_falsos_alertas_91_perdidos.joblib": "ea5494027e6b0d5c5d90315ed1566a3143c57a171d46c061083bed4bb1affbcb",
+  "artefatos/Modelo_613_atrasos_6774_falsos_alertas_91_perdidos.json": "7bfab8221ab32456075c4910ea8c1a0d15c8d03f85e2be3708b835a52bb9a272",
+  "dados/origem.json": "6caf268a3d7f721a8158ffd71bd65acbc751b0bfb5c57b11c2f26281feaa3ed9",
+  "dados/pedidos_avaliacao.csv.gz": "4a4064d7c3bb9ea41463cc0cc29741073598c1c9af7e0abfc6b60554afc05f66",
+  "dados/previsoes_564.csv": "22959dcf424e37701e73cb59b31cc58857396c1012193ff08c08e7ab9e339251",
+  "dados/previsoes_613.csv": "d297660d3ff2f12994cfd9ddfc3b9796bb717ac90dd65cdfb15bdfc3d7c822f7",
+  "dados/previsoes_temporais.csv.gz": "753ab490ad2da7640fcd3bbafb4a42c1abb654d65206b658a745edef0f5019f9"
+}
