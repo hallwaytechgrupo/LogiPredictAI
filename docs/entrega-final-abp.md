@@ -2,10 +2,10 @@
 
 ## Situação técnica
 
-A base de integração foi a `main`, que reúne Flutter, Node, serviço Python,
-pedidos, hubs e análises. A pesquisa de ML fica na `machineLearning`.
-A branch `codex/mapa-simulacoes-final` combina a aplicação com os dois notebooks
-finais, seus pesos e o novo mapa usando o modelo 564 + filtro.
+A versão de apresentação está na `main`, com Flutter, Node.js, serviço Python,
+pedidos, hubs, análises e os dois notebooks finais com seus pesos treinados.
+O mapa utiliza o modelo 564 + filtro contextual. A pesquisa e os experimentos
+de ML ficam na `machineLearning`.
 
 O sistema já demonstra o fluxo de entrada → validação → API → modelo real →
 classificação → mapa → comparação de cenários. Os mapas Web usam Leaflet, com
@@ -20,8 +20,8 @@ impedem apresentá-lo como um serviço comercial validado.
 
 | Prioridade | O que falta decidir ou preparar | Motivo |
 | --- | --- | --- |
-| Essencial | Revisão da integração e incorporação da branch final à `main` pela equipe | Definir uma única versão de entrega para todos os integrantes |
-| Essencial | Conferir o aceite com o enunciado/rubrica oficial da ABP e atualizar os cartões no kanban | A análise do código não substitui o aceite acadêmico; a rubrica completa não está no repositório |
+| Essencial | Revisar a versão integrada na `main` e definir o commit da apresentação | Todos os integrantes demonstram a mesma versão |
+| Essencial | Conferir os critérios da ABP e atualizar os cartões no kanban | Relacionar funcionalidades e evidências aos critérios de avaliação |
 | Essencial | Atualizar os slides/pôster para RF + filtro CatBoost e os números finais | Evitar apresentar os resultados antigos como se fossem os do mapa atual |
 | Essencial | Ensaiar o roteiro no notebook e na resolução da tela que serão usados na feira | Verificar tempo, legibilidade e operação sem depender de improviso |
 | Essencial | Salvar vídeo curto e capturas de uma demonstração real | Ter uma alternativa caso energia, navegador ou computador falhe |
@@ -29,10 +29,10 @@ impedem apresentá-lo como um serviço comercial validado.
 | Conforme rubrica | Validar também o caminho com PostgreSQL ativo, caso seja apresentado | A verificação local desta etapa utilizou fallback JSON, com banco indisponível |
 | Conforme rubrica | Homologar o build Docker e Mobile se forem entregas exigidas | Testes Web/local não equivalem a testes de implantação Linux ou de aplicativo móvel |
 
-As pesquisas antigas e o arquivo ZIP local não entram na publicação final.
-Os dois modelos selecionados estão na pasta final, com os códigos necessários
-para carregar os pesos. A pasta `.venv` e os dados operacionais particulares não
-devem ser adicionados com `git add .`.
+Os notebooks, pesos, dados de avaliação e módulos de inferência estão em
+`ML/modelos_finais`. Essa pasta contém os arquivos necessários à execução dos
+dois classificadores. Dependências e configuração do ambiente estão descritas
+no [README](../README.md).
 
 ## Roteiro de aproximadamente cinco minutos
 
@@ -87,10 +87,9 @@ sem exigir a abertura de um endereço localhost no celular dos visitantes.
 
 ## Para uma operação comercial posterior
 
-Não é necessário prometer esses itens como concluídos na feira, a menos que
-façam parte do enunciado: autenticação/autorização, configurações seguras de
-banco e credenciais fora do código, persistência e backup homologados, testes
-de carga, observabilidade e monitoramento de mudança da distribuição dos dados.
+A evolução para uso comercial envolve autenticação/autorização, configuração
+segura de banco e credenciais, persistência e backup homologados, testes de
+carga, observabilidade e monitoramento de mudança da distribuição dos dados.
 
 Para ML, é preciso testar em novos pedidos/períodos que não participaram das
 escolhas, calibrar o score em dados separados, definir o custo/capacidade de

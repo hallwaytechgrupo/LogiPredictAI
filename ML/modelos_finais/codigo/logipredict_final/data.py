@@ -7,7 +7,7 @@ from .features import feature_frame
 DATA_COMMIT='8fbdf36cc75da4befa2c81a726bbbcf646205ed0'
 BR_LAT_BOUNDS=(-35,6)
 BR_LON_BOUNDS=(-75,-28)
-# 1. Localizando os seis CSVs, sem alterar a branch ou gravar credenciais
+# 1. Localização dos seis CSVs Olist usados no treinamento
 REQUIRED_TABLES = ['orders', 'order_items', 'customers', 'products', 'sellers', 'geolocation']
 REQUIRED_FILES = [f'olist_{name}_dataset.csv' for name in REQUIRED_TABLES]
 

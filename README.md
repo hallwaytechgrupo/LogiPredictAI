@@ -1,12 +1,192 @@
+# 📦 LogiPredict AI — entrega consolidada
+
+<div align="center">
+
+**Previsão de risco de atraso com dados reais da Olist**<br>
+Flutter Web · Leaflet · Node.js · FastAPI · Random Forest · CatBoost
+
+**Versão de entrega: `main` · Atualização de 22/11/2026**
+
+[Começar](#como-executar-esta-versão) · [Mapa](#mapa-planejar-uma-compra-futura) · [Modelos e resultados](#modelos-finais-e-resultados) · [Guia da demonstração](docs/mapa-e-demonstracao.md) · [Preparação da feira](docs/entrega-final-abp.md)
+
+</div>
+
+> **Versão atual:** a `main` reúne a aplicação, o mapa logístico, os dois
+> notebooks finais, os pesos treinados, o catálogo geográfico e os resultados
+> da avaliação. O mapa usa o modelo 564 + filtro contextual.
+
+## O que esta atualização entrega
+
+| Área | O que está disponível |
+| --- | --- |
+| **Planejamento de entregas** | Simulação de uma compra futura com datas, origem, destino, peso, volume, quantidade e valores |
+| **Mapa interativo** | Leaflet com ruas/cidades do OpenStreetMap, formulário à esquerda e classificação da entrega |
+| **Histórico regional** | Atrasos observados na Olist por região e UF, com hubs cadastrados no mapa |
+| **Comparação de alternativas** | Novas previsões ao variar o despacho ou o prazo, com indicação de feriados no intervalo |
+| **Aprendizagem de máquina** | Modelo 564 + filtro utilizado pelo novo mapa; modelo 613 + filtro preservado para comparação |
+| **Operação existente** | Simulador logístico, importação CSV, consulta de pedidos, indicadores e gestão de hubs mantidos |
+| **Integração** | Flutter → API Node.js → serviço Python → pesos treinados, com validações e mensagens de erro/carregamento |
+
+```mermaid
+flowchart LR
+    U[Compra planejada no formulário] --> F[Flutter Web e Leaflet]
+    F --> N[API Node.js]
+    N --> P[Serviço Python FastAPI]
+    P --> M[Modelo 564 + filtro contextual]
+    M --> R[Baixo, Médio ou Alto]
+    R --> F
+    H[Histórico real Olist] --> P
+```
+
+O treinamento acontece offline. Ao clicar em **Calcular risco**, o serviço
+carrega os pesos preservados e analisa as entradas; não treina outro modelo
+nem transforma a simulação em um pedido operacional salvo.
+
+## Mapa: planejar uma compra futura
+
+![Simulação de uma compra futura com formulário lateral e mapa Leaflet](docs/images/mapa-simulacao-futura.jpg)
+
+*A imagem mostra um cenário hipotético de compra em 23/12. A classificação é
+retornada pelo modelo preservado, e os feriados aparecem como contexto.*
+
+1. Abra **Mapa de Calor Logístico → Simular nova entrega**.
+2. Pesquise origem e destino por **CEP ou cidade** e selecione uma sugestão.
+3. Informe compra, despacho, prazo prometido e características da encomenda.
+4. Clique em **Calcular risco** para consultar a classificação, o trajeto
+   geográfico e as alternativas comparadas.
+5. Para conhecer o fluxo, use **Exemplo: compra em 23/12** e depois altere os
+   campos para pesquisar outros cenários.
+
+O formulário não exige selecionar um pedido antigo. Os locais vêm de um catálogo
+real de **19.011 prefixos CEP**; as coordenadas são aproximadas. O ID do vendedor
+é opcional: quando não informado, a análise usa o contexto de rota/região,
+sem atribuir ao pedido o histórico de outro vendedor. O catálogo também preserva
+**3.095 vendedores reais** para consultas compatíveis com a base.
+
+As faixas representam a decisão das duas etapas do modelo:
+
+| Faixa | Interpretação |
+| --- | --- |
+| **Baixo** | A primeira etapa não gerou alerta de atraso |
+| **Médio** | A primeira etapa gerou alerta e o filtro contextual o retirou |
+| **Alto** | O modelo final manteve o alerta |
+
+Na vista **Histórico por região**, as taxas são atrasos que ocorreram na base,
+não previsões para novas compras. Selecione uma região na lista para aproximar
+ou clique no nome da região no mapa para consultar suas UFs.
+
+Para reduzir o custo de navegação, apenas um mapa fica ativo. O histórico usa
+cache de CSVs/agregados, a busca de CEP não inicializa o modelo e a previsão
+futura não recalcula a avaliação dos 19.258 pedidos antigos. Zoom e arraste
+ficam sob controle do Leaflet, sem repassar movimentos do mouse ao Flutter.
+As ruas do OpenStreetMap precisam de internet; a biblioteca Leaflet é local.
+
+## Modelos finais e resultados
+
+A avaliação preservada contém **19.258 pedidos, sendo 704 atrasos reais**.
+
+| Resultado | **564 + filtro — usado no novo mapa** | **613 + filtro — alternativa preservada** |
+| --- | ---: | ---: |
+| Atrasos reais encontrados | 564 | 613 |
+| Atrasos não detectados | 140 | 91 |
+| Falsos alertas de atraso | 4.358 | 6.774 |
+| Entregas no prazo sem alerta | 14.196 | 11.780 |
+| Recall: proporção dos atrasos encontrados | 80,11% | 87,07% |
+| Precisão: proporção dos alertas que eram atrasos | 11,46% | 8,30% |
+
+O **564 + filtro** combina a Random Forest com um revisor contextual CatBoost.
+O **613 + filtro** preserva a combinação de CatBoost, sobrevivência AFT e filtro
+contextual. O primeiro gera menos falsos alertas; o segundo encontra mais atrasos.
+O novo mapa utiliza exclusivamente o primeiro, versão `modelo_564_filter`.
+Os endpoints anteriores continuam usando seu contrato e modelo original.
+
+Os atributos incluem datas de compra/despacho/prazo, origem/destino, distância
+aproximada, peso, volume, quantidade, valor dos produtos, frete e contexto
+histórico disponível antes do despacho. A entrega efetiva do próprio pedido
+não é uma entrada de previsão. Comparações de cenários mantêm o corte histórico
+do cenário base, evitando consultar entregas futuras para sugerir outra data.
+
+| Arquivo | Finalidade |
+| --- | --- |
+| [Notebook 564 + filtro](ML/modelos_finais/Modelo_564_atrasos_4358_falsos_alertas_140_perdidos.ipynb) | Carregar, explicar e avaliar o modelo selecionado |
+| [Notebook 613 + filtro](ML/modelos_finais/Modelo_613_atrasos_6774_falsos_alertas_91_perdidos.ipynb) | Carregar, explicar e avaliar a alternativa preservada |
+| [Pesos e metadados](ML/modelos_finais/artefatos/) | Modelos `.joblib`, configurações e hashes de integridade |
+| [Dados de avaliação](ML/modelos_finais/dados/) | Amostra real, previsões preservadas e origem dos dados |
+| [Código de apoio](ML/modelos_finais/codigo/) | Transformações, histórico, validação, inferência e reajuste opcional |
+| [Como abrir os notebooks](ML/modelos_finais/LEIA_ME.md) | Kernel, dependências e explicação dos arquivos |
+
+Abra os notebooks no VS Code, selecione o Python da `.venv` e use **Executar Tudo**.
+A execução padrão carrega os pesos e verifica os resultados; não retreina nem
+sobrescreve os modelos. O reajuste opcional do filtro está documentado no guia
+e exige os dados originais correspondentes. Mantenha as pastas de apoio junto
+dos notebooks.
+
+## Como executar esta versão
+
+Para atualizar uma cópia local com as alterações já salvas:
+
+```bash
+git switch main
+git pull --ff-only origin main
+```
+
+O guia [Iniciar no VS Code / PowerShell](#iniciar-no-vs-code--powershell) descreve
+a instalação das dependências e a execução dos três serviços:
+**Python (8000)**, **Node.js (3001)** e **Flutter (8080)**. A aplicação abre em
+[localhost:8080](http://localhost:8080). Os dois modelos finais e o catálogo
+necessário à nova simulação já acompanham esta versão.
+
+Se os serviços já estavam abertos antes da atualização, encerre-os e inicie-os
+novamente com os comandos do guia. Use **Ctrl+Shift+R** no navegador para
+recarregar os arquivos atuais. Para demonstração no Web, o comando Flutter
+inclui `--release`.
+
+## API, validação e apresentação
+
+| Endpoint público | Uso |
+| --- | --- |
+| `GET /api/v1/map/locations?q=...` | Buscar CEP, cidade ou UF no catálogo real |
+| `POST /api/v1/map/forecast` | Analisar uma entrega planejada com entradas completas |
+| `GET /api/v1/orders` | Consultar pedidos operacionais importados |
+| `POST /api/v1/predictions` | Executar a previsão do simulador existente |
+| `POST /predict` | Consultar a regra simples de risco com referência histórica, preservada |
+
+[Contrato da API](docs/api.md) · [Arquitetura operacional](docs/evolucao-operacional.md) ·
+[Guia do mapa](docs/mapa-e-demonstracao.md) ·
+[Validações e limites dos testes](docs/validation.md) ·
+[Roteiro e pendências para a ABP/feira](docs/entrega-final-abp.md).
+
+Na validação local desta entrega: **56 testes Python aprovados, 158 Node
+aprovados e 1 ignorado, 67 Flutter aprovados e build Web concluído**.
+Também foram verificados busca de CEP, calendário, previsão, troca entre vistas,
+zoom, arraste e detalhes por UF no navegador. PostgreSQL, Docker e Mobile
+continuam exigindo homologação própria.
+
+> **Limitações da avaliação:** a base Olist é de 2016–2018 e o benchmark
+> é retrospectivo/exploratório, com o período final já consultado em pesquisas
+> anteriores. Dos 564 atrasos encontrados, 434 foram antecipados e 130 já
+> estavam vencidos no despacho; no alternativo, são 481 e 132. O score não é
+> uma probabilidade calibrada, e baixo risco não garante entrega no prazo.
+> Feriados fixos nacionais aparecem como contexto de calendário; o modelo
+> não aprende um efeito explícito de feriado nem comprova causa de atraso.
+> Renegociar o prazo não acelera o transporte. Uma data alternativa só recebe
+> sugestão de faixa menor quando a comparação realmente reduz essa faixa.
+
+---
+
+## Guias e histórico do projeto
+
+As próximas seções detalham a instalação, os recursos da plataforma e os
+resultados das primeiras sprints.
+
 # LogiPredict AI — versão integrada
 
 Plataforma acadêmica para pesquisar entregas e apoiar o acompanhamento de risco
 de atraso no e-commerce, com dados históricos reais da Olist. Flutter Web,
 Node.js e Python/FastAPI, com modelos treinados offline.
 
-O código completo parte da `main`. A entrega do novo mapa está na branch
-`codex/mapa-simulacoes-final`, que reúne essa aplicação e os dois modelos finais.
-A `machineLearning` mantém a pesquisa e a publicação dos modelos.
+A `main` contém a aplicação completa e os dois modelos finais de classificação
+de risco. A `machineLearning` reúne os experimentos e a pesquisa dos modelos.
 
 [Guia do mapa e demonstração](docs/mapa-e-demonstracao.md) ·
 [Preparação da ABP e da feira](docs/entrega-final-abp.md) ·
