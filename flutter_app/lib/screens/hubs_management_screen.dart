@@ -691,6 +691,7 @@ class _HubsManagementScreenState extends State<HubsManagementScreen> {
                               onPressed: _load,
                               icon: const Icon(Icons.search))),
                       onSubmitted: (_) => _load()),
+                  const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     value: _validationStatusFilter,
                     decoration: const InputDecoration(labelText: 'Validação'),

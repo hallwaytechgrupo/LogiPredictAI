@@ -7,8 +7,696 @@ extension _DashboardSimulatorScreen on _DashboardScreenState {
       child: Column(
         children: [
           _buildFormCard(),
+          if (_simulatorController.baseResult != null) ...[
+            const SizedBox(height: 18),
+            _buildAlternativeScenarioSection(),
+            const SizedBox(height: 18),
+            _buildSensitivitySection(),
+          ],
           const SizedBox(height: 18),
           _buildResults(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSensitivitySection() {
+    final base = _simulatorController.baseScenario!;
+    final originalDays = DateTime(
+      base.estimatedDeliveryAt.year,
+      base.estimatedDeliveryAt.month,
+      base.estimatedDeliveryAt.day,
+    )
+        .difference(DateTime(
+          base.dispatchedAt.year,
+          base.dispatchedAt.month,
+          base.dispatchedAt.day,
+        ))
+        .inDays;
+    if (_sensitivityStartController.text.isEmpty &&
+        _sensitivityEndController.text.isEmpty) {
+      final start =
+          (originalDays - SimulatorSensitivityController.defaultBeforeDays)
+              .clamp(0, 100000);
+      _sensitivityStartController.text = start.toString();
+      _sensitivityEndController.text =
+          (originalDays + SimulatorSensitivityController.defaultAfterDays)
+              .toString();
+    }
+    final state = _sensitivityController.status;
+    final points = _sensitivityController.points;
+    final scores =
+        points.map((point) => point.result.delayProbability).toList();
+    final minScore =
+        scores.isEmpty ? 0.0 : scores.reduce((a, b) => a < b ? a : b);
+    final maxScore =
+        scores.isEmpty ? 1.0 : scores.reduce((a, b) => a > b ? a : b);
+    final yPadding =
+        scores.isEmpty ? .1 : ((maxScore - minScore) * .15).clamp(.02, .15);
+    final originalPoint = points
+        .where((point) => point.remainingDays == originalDays)
+        .firstOrNull;
+    final alternativeDays = _simulatorController.alternativeScenario == null
+        ? null
+        : DateTime(
+            _simulatorController.alternativeScenario!.estimatedDeliveryAt.year,
+            _simulatorController.alternativeScenario!.estimatedDeliveryAt.month,
+            _simulatorController.alternativeScenario!.estimatedDeliveryAt.day,
+          )
+            .difference(DateTime(
+              _simulatorController.alternativeScenario!.dispatchedAt.year,
+              _simulatorController.alternativeScenario!.dispatchedAt.month,
+              _simulatorController.alternativeScenario!.dispatchedAt.day,
+            ))
+            .inDays;
+    String scorePercent(double score, {int decimals = 1}) {
+      final text = (score * 100).toStringAsFixed(decimals).replaceAll('.', ',');
+      return '$text%';
+    }
+
+    String tooltipLabelFor(int days) {
+      if (days == originalDays) return 'Cenário original';
+      if (days == alternativeDays) return 'Cenário alternativo';
+      return '';
+    }
+
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text('Análise de sensibilidade',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 5),
+          Text(
+            'Executa inferências reais mantendo os demais atributos do cenário original constantes. O score pode oscilar porque o Random Forest não impõe monotonicidade.',
+            style: TextStyle(fontSize: 12, color: _secondaryText),
+          ),
+          const SizedBox(height: 12),
+          Text('Prazo original: $originalDays dias'),
+          const SizedBox(height: 8),
+          LayoutBuilder(builder: (context, constraints) {
+            final width = constraints.maxWidth > 460
+                ? (constraints.maxWidth - 12) / 2
+                : constraints.maxWidth;
+            return Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              children: [
+                SizedBox(
+                  width: width,
+                  child: _textField(
+                    controller: _sensitivityStartController,
+                    label: 'Prazo inicial (dias)',
+                    keyboardType: TextInputType.number,
+                    onChanged: (_) => _markSensitivityInputsChanged(),
+                    enabled: !stateIsLoading,
+                  ),
+                ),
+                SizedBox(
+                  width: width,
+                  child: _textField(
+                    controller: _sensitivityEndController,
+                    label: 'Prazo final (dias)',
+                    keyboardType: TextInputType.number,
+                    onChanged: (_) => _markSensitivityInputsChanged(),
+                    enabled: !stateIsLoading,
+                  ),
+                ),
+              ],
+            );
+          }),
+          const SizedBox(height: 8),
+          Text(
+              'Intervalo: ${_sensitivityStartController.text} a ${_sensitivityEndController.text} dias${_sensitivityDirty ? ' (não analisado)' : ''}',
+              style: TextStyle(fontSize: 12, color: _secondaryText)),
+          const SizedBox(height: 10),
+          FilledButton.icon(
+            onPressed: stateIsLoading ? null : _analyzeSensitivity,
+            icon: stateIsLoading
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.show_chart),
+            label: Text(
+                stateIsLoading ? 'Analisando prazos...' : 'Analisar prazos'),
+          ),
+          if (state == SimulatorSensitivityStatus.error &&
+              _sensitivityController.error != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                      child: Text(
+                          'Análise indisponível: ${_sensitivityController.error}',
+                          style: const TextStyle(
+                              color: Colors.red, fontSize: 12))),
+                  TextButton(
+                      onPressed: _analyzeSensitivity,
+                      child: const Text('Tentar novamente')),
+                ],
+              ),
+            ),
+          if (state == SimulatorSensitivityStatus.stale)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                  'O cenário original mudou. Execute a análise novamente.',
+                  style: TextStyle(color: _secondaryText, fontSize: 12)),
+            ),
+          if (state == SimulatorSensitivityStatus.success &&
+              points.isNotEmpty &&
+              !_sensitivityDirty) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 260,
+              child: LineChart(
+                LineChartData(
+                  minX: points.first.remainingDays.toDouble(),
+                  maxX: points.last.remainingDays.toDouble(),
+                  minY: (minScore - yPadding).clamp(0.0, 1.0),
+                  maxY: (maxScore + yPadding).clamp(0.0, 1.0),
+                  lineTouchData: LineTouchData(
+                    enabled: true,
+                    touchTooltipData: LineTouchTooltipData(
+                      getTooltipItems: (spots) => spots.map((spot) {
+                        final days = spot.x.round();
+                        final scenarioLabel = tooltipLabelFor(days);
+                        return LineTooltipItem(
+                          'Prazo: $days dias\n'
+                          'Score previsto: ${scorePercent(spot.y)}'
+                          '${scenarioLabel.isEmpty ? '' : '\n$scenarioLabel'}',
+                          const TextStyle(color: Colors.white),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  gridData: const FlGridData(show: true),
+                  titlesData: FlTitlesData(
+                    leftTitles: AxisTitles(
+                      axisNameWidget: const Text('Score de atraso'),
+                      axisNameSize: 28,
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 48,
+                        getTitlesWidget: (value, meta) => Text(
+                          scorePercent(value, decimals: 0),
+                          style: const TextStyle(fontSize: 10),
+                        ),
+                      ),
+                    ),
+                    bottomTitles: AxisTitles(
+                      axisNameWidget:
+                          const Text('Prazo disponível para entrega (dias)'),
+                      axisNameSize: 32,
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 36,
+                        interval: 1,
+                        getTitlesWidget: (value, meta) => SideTitleWidget(
+                          axisSide: meta.axisSide,
+                          space: 6,
+                          child: Text(
+                            value.round().toString(),
+                            style: const TextStyle(fontSize: 10),
+                          ),
+                        ),
+                      ),
+                    ),
+                    topTitles:
+                        AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    rightTitles:
+                        AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  ),
+                  lineBarsData: [
+                    LineChartBarData(
+                      spots: [
+                        for (final point in points)
+                          FlSpot(point.remainingDays.toDouble(),
+                              point.result.delayProbability)
+                      ],
+                      isCurved: false,
+                      dotData: FlDotData(
+                        show: true,
+                        getDotPainter: (spot, percent, bar, index) {
+                          final isOriginal =
+                              originalPoint != null && spot.x == originalDays;
+                          final isAlternative = alternativeDays != null &&
+                              spot.x == alternativeDays;
+                          return FlDotCirclePainter(
+                              radius: isOriginal || isAlternative ? 5 : 3,
+                              color: isOriginal
+                                  ? Colors.orange
+                                  : (isAlternative ? Colors.purple : blue),
+                              strokeWidth: 1,
+                              strokeColor: Colors.white);
+                        },
+                      ),
+                      color: blue,
+                      barWidth: 2,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Text('Modelo: ${_sensitivityController.modelVersion ?? '—'}'),
+            Text(
+                'Marcadores: prazo original${alternativeDays == null ? '' : ' e prazo alternativo'}.'),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 16,
+              runSpacing: 6,
+              children: [
+                _sensitivityLegendItem(blue, 'Score previsto de atraso'),
+                _sensitivityLegendItem(
+                    Colors.orange, 'Prazo original ($originalDays dias)'),
+                if (alternativeDays != null)
+                  _sensitivityLegendItem(Colors.purple,
+                      'Prazo alternativo ($alternativeDays dias)'),
+              ],
+            ),
+            const SizedBox(height: 4),
+            const Text('Como interpretar este gráfico?',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 3),
+            const Text(
+                'O eixo horizontal representa o número de dias disponíveis entre o despacho e a entrega prevista. O eixo vertical mostra o score de atraso estimado pelo modelo. Em cada ponto, apenas o prazo de entrega foi alterado; os demais atributos permaneceram constantes.'),
+            const SizedBox(height: 3),
+            Text(
+                'Scores menores indicam menor risco estimado pelo modelo. Como o Random Forest não garante monotonicidade, o score pode apresentar oscilações locais conforme o prazo aumenta. Cada ponto é uma inferência real e o score não é uma probabilidade calibrada.',
+                style: TextStyle(fontSize: 11, color: _secondaryText)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  bool get stateIsLoading => _sensitivityController.isLoading;
+
+  Widget _sensitivityLegendItem(Color color, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 5),
+        Text(label, style: const TextStyle(fontSize: 11)),
+      ],
+    );
+  }
+
+  Widget _buildAlternativeScenarioSection() {
+    if (!_alternativeVisible) {
+      return _card(
+        child: FilledButton.icon(
+          onPressed: _createAlternativeScenario,
+          icon: const Icon(Icons.add_circle_outline),
+          label: const Text('Criar cenário alternativo'),
+        ),
+      );
+    }
+    String? numberValidator(String? raw, String label, {bool required = true}) {
+      final text = (raw ?? '').trim();
+      if (text.isEmpty) return required ? 'Informe $label.' : null;
+      final value = _parseNumber(text);
+      if (value == null || !value.isFinite || value < 0) {
+        return 'Informe $label válido.';
+      }
+      return null;
+    }
+
+    String? cepValidator(String? raw) {
+      try {
+        DispatchSimulation.parseOriginCeps(raw ?? '');
+        return null;
+      } on FormatException catch (error) {
+        return error.message;
+      }
+    }
+
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.alt_route, color: blue),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text('Cenário alternativo',
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              ),
+              TextButton.icon(
+                onPressed:
+                    _alternativeAnalyzing ? null : _restoreAlternativeScenario,
+                icon: const Icon(Icons.restore),
+                label: const Text('Restaurar valores originais'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 5),
+          Text(
+            'Edite uma cópia independente do cenário original. A comparação mostra diferenças do modelo e não comprova causalidade.',
+            style: TextStyle(fontSize: 12, color: _secondaryText),
+          ),
+          const SizedBox(height: 12),
+          Form(
+            key: _alternativeFormKey,
+            child: LayoutBuilder(builder: (context, constraints) {
+              final half = constraints.maxWidth > 460
+                  ? (constraints.maxWidth - 12) / 2
+                  : constraints.maxWidth;
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  SizedBox(
+                    width: constraints.maxWidth,
+                    child: _textField(
+                      controller: _alternativeOriginController,
+                      label: 'CEPs de origem alternativos',
+                      validator: cepValidator,
+                      onChanged: (_) => _alternativeInputsChanged(),
+                      enabled: !_alternativeAnalyzing,
+                    ),
+                  ),
+                  SizedBox(
+                    width: half,
+                    child: _textField(
+                      controller: _alternativeDestinationController,
+                      label: 'CEP de destino alternativo',
+                      validator: cepValidator,
+                      onChanged: (_) => _alternativeInputsChanged(),
+                      enabled: !_alternativeAnalyzing,
+                    ),
+                  ),
+                  for (final item in [
+                    (_alternativePurchaseAtController, 'Data da compra'),
+                    (_alternativeDispatchedAtController, 'Data do despacho'),
+                    (
+                      _alternativeEstimatedDeliveryAtController,
+                      'Data prometida'
+                    ),
+                  ])
+                    SizedBox(
+                      width: half,
+                      child: _alternativeDateField(item.$1, item.$2),
+                    ),
+                  SizedBox(
+                    width: half,
+                    child: _textField(
+                      controller: _alternativeWeightController,
+                      label: 'Peso alternativo (kg)',
+                      validator: (value) => numberValidator(value, 'o peso'),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      onChanged: (_) => _alternativeInputsChanged(),
+                      enabled: !_alternativeAnalyzing,
+                    ),
+                  ),
+                  SizedBox(
+                    width: half,
+                    child: _textField(
+                      controller: _alternativeVolumeController,
+                      label: 'Volume alternativo (cm³, opcional)',
+                      validator: (value) =>
+                          numberValidator(value, 'o volume', required: false),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      onChanged: (_) => _alternativeInputsChanged(),
+                      enabled: !_alternativeAnalyzing,
+                    ),
+                  ),
+                  SizedBox(
+                    width: half,
+                    child: _textField(
+                      controller: _alternativeItemsCountController,
+                      label: 'Itens alternativos',
+                      validator: (value) {
+                        final count = int.tryParse((value ?? '').trim());
+                        return count == null || count < 1 || count > 10000
+                            ? 'Informe de 1 a 10.000 itens.'
+                            : null;
+                      },
+                      keyboardType: TextInputType.number,
+                      onChanged: (_) => _alternativeInputsChanged(),
+                      enabled: !_alternativeAnalyzing,
+                    ),
+                  ),
+                  SizedBox(
+                    width: half,
+                    child: _textField(
+                      controller: _alternativeDeclaredValueController,
+                      label: 'Preço alternativo (R\$)',
+                      validator: (value) => numberValidator(value, 'o preço'),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      onChanged: (_) => _alternativeInputsChanged(),
+                      enabled: !_alternativeAnalyzing,
+                    ),
+                  ),
+                  SizedBox(
+                    width: half,
+                    child: _textField(
+                      controller: _alternativeFreightValueController,
+                      label: 'Frete alternativo (R\$)',
+                      validator: (value) => numberValidator(value, 'o frete'),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      onChanged: (_) => _alternativeInputsChanged(),
+                      enabled: !_alternativeAnalyzing,
+                    ),
+                  ),
+                ],
+              );
+            }),
+          ),
+          const SizedBox(height: 14),
+          FilledButton.icon(
+            onPressed: _alternativeAnalyzing ? null : _analyzeAlternative,
+            icon: _alternativeAnalyzing
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.compare_arrows),
+            label: Text(_alternativeAnalyzing
+                ? 'Consultando modelo...'
+                : 'Prever atraso neste cenário'),
+          ),
+          if (!_alternativeAnalyzing &&
+              _simulatorController.alternativeError != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Text(
+                'Previsão alternativa indisponível: ${_simulatorController.alternativeError}',
+                style: const TextStyle(color: Colors.red, fontSize: 12),
+              ),
+            ),
+          if (_alternativeVisible &&
+              !_alternativeDirty &&
+              _simulatorController.comparison != null)
+            _buildScenarioComparison(),
+          if (_alternativeDirty)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Text(
+                  'Parâmetros alterados. Execute uma nova previsão para atualizar a comparação.',
+                  style: TextStyle(color: _secondaryText, fontSize: 12)),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _alternativeDateField(TextEditingController controller, String label) {
+    return _dateTimeField(
+      controller: controller,
+      label: label,
+      onChanged: _alternativeInputsChanged,
+    );
+  }
+
+  Widget _buildScenarioComparison() {
+    final comparison = _simulatorController.comparison!;
+    final baseScenario = comparison.baseScenario;
+    final alternativeScenario = comparison.alternativeScenario;
+    String formatDate(DateTime value) => SimulatorDateFormat.format(value);
+    String formatValue(String field, SimulatorScenario scenario) {
+      switch (field) {
+        case 'originCeps':
+          return scenario.originCeps.join(', ');
+        case 'destinationCep':
+          return scenario.destinationCep;
+        case 'purchaseAt':
+          return formatDate(scenario.purchaseAt);
+        case 'dispatchedAt':
+          return formatDate(scenario.dispatchedAt);
+        case 'estimatedDeliveryAt':
+          return formatDate(scenario.estimatedDeliveryAt);
+        case 'weightKg':
+          return '${scenario.weightKg.toStringAsFixed(3)} kg';
+        case 'volumeCm3':
+          return scenario.volumeCm3 == null
+              ? 'não informado'
+              : '${scenario.volumeCm3!.toStringAsFixed(2)} cm³';
+        case 'itemsCount':
+          return scenario.itemsCount.toString();
+        case 'price':
+          return 'R\$ ${scenario.price.toStringAsFixed(2)}';
+        case 'freightValue':
+          return 'R\$ ${scenario.freightValue.toStringAsFixed(2)}';
+        default:
+          return '—';
+      }
+    }
+
+    const fieldLabels = <String, String>{
+      'originCeps': 'CEPs de origem',
+      'destinationCep': 'CEP de destino',
+      'purchaseAt': 'Data da compra',
+      'dispatchedAt': 'Data do despacho',
+      'estimatedDeliveryAt': 'Data prometida',
+      'weightKg': 'Peso total',
+      'volumeCm3': 'Volume total',
+      'itemsCount': 'Quantidade de itens',
+      'price': 'Valor do pedido',
+      'freightValue': 'Valor do frete',
+    };
+    Widget resultCard(String title, dynamic result) => Expanded(
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: _surfaceAlt,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: _border),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 6),
+                Text(
+                    'Score previsto de atraso: ${(result.delayProbability * 100).toStringAsFixed(1)}%'),
+                Text(result.predictedLate
+                    ? 'Classificação: acima do threshold'
+                    : 'Classificação: abaixo do threshold'),
+                Text(
+                    'Entrega prevista: ${formatDate(result == comparison.base ? baseScenario.estimatedDeliveryAt : alternativeScenario.estimatedDeliveryAt)}'),
+                Text(
+                    'Prazo disponível: ${result == comparison.base ? comparison.baseRemainingDays : comparison.alternativeRemainingDays} dias'),
+                Text(
+                    'Threshold: ${(result.threshold * 100).toStringAsFixed(1)}%'),
+                Text('Modelo: ${result.modelVersion}'),
+                ...result.warnings.map<Widget>((warning) => Text(
+                    'Aviso: $warning',
+                    style: TextStyle(fontSize: 11, color: _secondaryText))),
+              ],
+            ),
+          ),
+        );
+    return Padding(
+      padding: const EdgeInsets.only(top: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Comparação de cenários',
+              style: TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          LayoutBuilder(builder: (context, constraints) {
+            final row = Row(children: [
+              resultCard('Cenário original', comparison.base),
+              const SizedBox(width: 10),
+              resultCard('Cenário alternativo', comparison.alternative),
+            ]);
+            return constraints.maxWidth < 600
+                ? Column(children: [
+                    resultCard('Cenário original', comparison.base),
+                    const SizedBox(height: 10),
+                    resultCard('Cenário alternativo', comparison.alternative)
+                  ])
+                : row;
+          }),
+          const SizedBox(height: 10),
+          Text(
+              'Diferença: ${comparison.differencePercentagePoints >= 0 ? '+' : ''}${comparison.differencePercentagePoints.toStringAsFixed(2)} pontos percentuais'),
+          Text(
+              'Diferença de prazo: ${comparison.remainingDaysDifference >= 0 ? '+' : ''}${comparison.remainingDaysDifference} dias'),
+          const SizedBox(height: 10),
+          const Text('O que mudou?',
+              style: TextStyle(fontWeight: FontWeight.bold)),
+          Text(
+              'Campos alterados: ${comparison.changedFields.isEmpty ? 'nenhum' : comparison.changedFields.join(', ')}'),
+          if (comparison.changedFields.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                border: Border.all(color: _border),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                    child: Row(
+                      children: [
+                        Expanded(flex: 2, child: Text('Variável')),
+                        Expanded(child: Text('Original')),
+                        Expanded(child: Text('Alternativo')),
+                      ],
+                    ),
+                  ),
+                  for (final field in comparison.changedFields)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 7),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            flex: 2,
+                            child: Text(fieldLabels[field] ?? field,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600)),
+                          ),
+                          Expanded(
+                              child: Text(formatValue(field, baseScenario))),
+                          Expanded(
+                              child: Text(
+                                  formatValue(field, alternativeScenario))),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+          if (comparison.shouldExplainHigherScore) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.amber.withValues(alpha: .14),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.amber.shade700),
+              ),
+              child: const Text(
+                'Você ampliou o prazo de entrega, mas o modelo retornou um score maior. O Random Forest utiliza padrões históricos e pode apresentar oscilações. Isso não significa que ampliar o prazo causou um aumento do risco real.',
+              ),
+            ),
+          ],
+          const SizedBox(height: 6),
+          Text(
+              'A comparação mostra diferenças nas previsões do modelo e não comprova uma relação causal entre as alterações e o atraso real.',
+              style: TextStyle(fontSize: 11, color: _secondaryText)),
         ],
       ),
     );
@@ -62,7 +750,8 @@ extension _DashboardSimulatorScreen on _DashboardScreenState {
             const _SectionTitle(
               icon: Icons.tune,
               title: 'Dados do Pedido',
-              subtitle: 'Preencha os dados para previsão de atraso e simulação de despacho.',
+              subtitle:
+                  'Preencha os dados para previsão de atraso e simulação de despacho.',
             ),
             const SizedBox(height: 8),
             Text(
@@ -191,7 +880,8 @@ extension _DashboardSimulatorScreen on _DashboardScreenState {
             }),
             const SizedBox(height: 18),
             FilledButton.icon(
-              onPressed: _isAnalyzing || _loadingSelectedOrder ? null : _analyze,
+              onPressed:
+                  _isAnalyzing || _loadingSelectedOrder ? null : _analyze,
               icon: _isAnalyzing
                   ? const SizedBox(
                       width: 18,
@@ -275,20 +965,26 @@ extension _DashboardSimulatorScreen on _DashboardScreenState {
                             fontWeight: FontWeight.w900,
                             color: _riskColor),
                       ),
-                      Text(
-                          _riskProbability == null
-                              ? 'SEM PREVISÃO'
-                              : 'PROBABILIDADE',
-                          style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: _secondaryText)),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                            _riskProbability == null
+                                ? 'SEM PREVISÃO'
+                                : 'SCORE PREVISTO DE ATRASO',
+                            style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: _secondaryText)),
+                      ),
                     ],
                   ),
                 );
                 return compact
-                    ? Column(
-                        children: [description, const SizedBox(height: 18), score])
+                    ? Column(children: [
+                        description,
+                        const SizedBox(height: 18),
+                        score
+                      ])
                     : Row(children: [
                         Expanded(child: description),
                         const SizedBox(width: 18),
@@ -300,7 +996,8 @@ extension _DashboardSimulatorScreen on _DashboardScreenState {
                 const Divider(height: 16),
                 const SizedBox(height: 8),
                 const Text('Retorno do modelo',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                    style:
+                        TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 6),
                 Text(
                     'Decisão: ${_predictedLate == true ? 'risco acima do limiar' : 'risco abaixo do limiar'}'),
@@ -321,7 +1018,8 @@ extension _DashboardSimulatorScreen on _DashboardScreenState {
                   ..._warnings.map((warning) => Padding(
                         padding: const EdgeInsets.only(bottom: 3),
                         child: Text('Aviso: $warning',
-                            style: TextStyle(fontSize: 12, color: _secondaryText)),
+                            style:
+                                TextStyle(fontSize: 12, color: _secondaryText)),
                       )),
                 ],
               ],
@@ -384,7 +1082,9 @@ extension _DashboardSimulatorScreen on _DashboardScreenState {
             ),
 
           // Error state
-          if (!_dispatchLoading && _dispatchError != null && _dispatchResult == null)
+          if (!_dispatchLoading &&
+              _dispatchError != null &&
+              _dispatchResult == null)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(12),
@@ -534,29 +1234,37 @@ extension _DashboardSimulatorScreen on _DashboardScreenState {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text('Avisos',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    style:
+                        TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                 ...warnings.map((w) {
                   final text = w.toString();
                   // Improve the OpenRouteService key missing warning
-                  if (text.contains('OPENROUTE') || text.contains('OpenRouteService não configurada')) {
+                  if (text.contains('OPENROUTE') ||
+                      text.contains('OpenRouteService não configurada')) {
                     return Padding(
                       padding: const EdgeInsets.only(top: 4, left: 8),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('• ', style: TextStyle(color: Colors.orange, fontSize: 12)),
+                          const Text('• ',
+                              style: TextStyle(
+                                  color: Colors.orange, fontSize: 12)),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 const Text(
                                   'Rota rodoviária indisponível',
-                                  style: TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.w500),
+                                  style: TextStyle(
+                                      color: Colors.orange,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500),
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
                                   'A chave API do OpenRouteService não está configurada. A distância entre hubs apresentada é geográfica (Haversine), em linha reta, e não representa a distância rodoviária real.',
-                                  style: const TextStyle(color: Colors.orange, fontSize: 11),
+                                  style: const TextStyle(
+                                      color: Colors.orange, fontSize: 11),
                                 ),
                               ],
                             ),
@@ -566,25 +1274,32 @@ extension _DashboardSimulatorScreen on _DashboardScreenState {
                     );
                   }
                   // Improve the Haversine fallback warning
-                  if (text.contains('Haversine') || text.contains('linha reta')) {
+                  if (text.contains('Haversine') ||
+                      text.contains('linha reta')) {
                     return Padding(
                       padding: const EdgeInsets.only(top: 4, left: 8),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('• ', style: TextStyle(color: Colors.orange, fontSize: 12)),
+                          const Text('• ',
+                              style: TextStyle(
+                                  color: Colors.orange, fontSize: 12)),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 const Text(
                                   'Distância geográfica (Haversine)',
-                                  style: TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.w500),
+                                  style: TextStyle(
+                                      color: Colors.orange,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500),
                                 ),
                                 const SizedBox(height: 2),
                                 const Text(
                                   'A distância entre hubs é calculada em linha reta. A rota rodoviária não pôde ser calculada porque o serviço de roteamento está indisponível.',
-                                  style: TextStyle(color: Colors.orange, fontSize: 11),
+                                  style: TextStyle(
+                                      color: Colors.orange, fontSize: 11),
                                 ),
                               ],
                             ),
@@ -598,7 +1313,8 @@ extension _DashboardSimulatorScreen on _DashboardScreenState {
                     padding: const EdgeInsets.only(top: 3, left: 8),
                     child: Text(
                       '• $text',
-                      style: const TextStyle(color: Colors.orange, fontSize: 12),
+                      style:
+                          const TextStyle(color: Colors.orange, fontSize: 12),
                     ),
                   );
                 }),
@@ -620,7 +1336,9 @@ extension _DashboardSimulatorScreen on _DashboardScreenState {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 13)),
+          Text(title,
+              style: TextStyle(
+                  fontWeight: FontWeight.bold, color: color, fontSize: 13)),
           const SizedBox(height: 4),
           Text(hub['name']?.toString() ?? 'N/A',
               style: const TextStyle(fontWeight: FontWeight.w500)),
@@ -633,7 +1351,8 @@ extension _DashboardSimulatorScreen on _DashboardScreenState {
     );
   }
 
-  Widget _distanceRow(String label, dynamic value, {Color? color, String? subtitle}) {
+  Widget _distanceRow(String label, dynamic value,
+      {Color? color, String? subtitle}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 1.5),
       child: Column(
@@ -646,14 +1365,19 @@ extension _DashboardSimulatorScreen on _DashboardScreenState {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(label, style: TextStyle(fontSize: 13, color: _secondaryText)),
+                    Text(label,
+                        style: TextStyle(fontSize: 13, color: _secondaryText)),
                     if (subtitle != null)
-                      Text(subtitle, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                      Text(subtitle,
+                          style: const TextStyle(
+                              fontSize: 10, color: Colors.grey)),
                   ],
                 ),
               ),
               Text(
-                value != null ? '${(value as num).toDouble().toStringAsFixed(2)} km' : 'N/A',
+                value != null
+                    ? '${(value as num).toDouble().toStringAsFixed(2)} km'
+                    : 'N/A',
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
@@ -695,7 +1419,9 @@ extension _DashboardSimulatorScreen on _DashboardScreenState {
     final allPoints = <LatLng>[];
 
     LatLng? toLatLng(Map<String, dynamic> point) {
-      if (point.isEmpty || point['latitude'] == null || point['longitude'] == null) {
+      if (point.isEmpty ||
+          point['latitude'] == null ||
+          point['longitude'] == null) {
         return null;
       }
       return LatLng(
@@ -756,7 +1482,8 @@ extension _DashboardSimulatorScreen on _DashboardScreenState {
       debugPrint('Dispatch map: geometry type = ${geometry.runtimeType}');
       if (geometry is Map<String, dynamic> && geometry['coordinates'] is List) {
         final coordsList = geometry['coordinates'] as List;
-        debugPrint('Dispatch map: coordinates count = ${coordsList.length}, first item type = ${coordsList.isNotEmpty ? coordsList.first.runtimeType : "empty"}');
+        debugPrint(
+            'Dispatch map: coordinates count = ${coordsList.length}, first item type = ${coordsList.isNotEmpty ? coordsList.first.runtimeType : "empty"}');
         // Convert coordinates: GeoJSON format is [longitude, latitude], but we need LatLng(latitude, longitude)
         // Accept any List that has at least 2 numeric elements, regardless of specific type
         final coords = <LatLng>[];
@@ -768,14 +1495,16 @@ extension _DashboardSimulatorScreen on _DashboardScreenState {
               if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
                 coords.add(LatLng(lat, lng));
               } else {
-                debugPrint('Dispatch map: skipping invalid coordinate [$lng, $lat]');
+                debugPrint(
+                    'Dispatch map: skipping invalid coordinate [$lng, $lat]');
               }
             } catch (e) {
               debugPrint('Dispatch map: failed to convert coordinate: $e');
             }
           }
         }
-        debugPrint('Dispatch map: converted ${coords.length} valid coordinates');
+        debugPrint(
+            'Dispatch map: converted ${coords.length} valid coordinates');
         if (coords.length >= 2) {
           polylines.add(Polyline(
             points: coords,
@@ -798,13 +1527,14 @@ extension _DashboardSimulatorScreen on _DashboardScreenState {
       final hasOpenRouteWarning = warnings.any((w) {
         final text = w.toString().toLowerCase();
         return text.contains('openroute') ||
-               text.contains('haversine') ||
-               text.contains('linha reta') ||
-               text.contains('roteamento indisponível');
+            text.contains('haversine') ||
+            text.contains('linha reta') ||
+            text.contains('roteamento indisponível');
       });
       if (hasOpenRouteWarning) {
         routeFailed = true;
-        routeFailureReason = 'Rota rodoviária não disponível. Apenas distância geográfica (Haversine) está disponível.';
+        routeFailureReason =
+            'Rota rodoviária não disponível. Apenas distância geográfica (Haversine) está disponível.';
       }
     }
 
@@ -879,12 +1609,14 @@ extension _DashboardSimulatorScreen on _DashboardScreenState {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 18),
+                    const Icon(Icons.warning_amber_rounded,
+                        color: Colors.orange, size: 18),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
                         routeFailureReason,
-                        style: const TextStyle(color: Colors.orange, fontSize: 11),
+                        style:
+                            const TextStyle(color: Colors.orange, fontSize: 11),
                       ),
                     ),
                   ],
@@ -907,8 +1639,7 @@ extension _DashboardSimulatorScreen on _DashboardScreenState {
                         'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
                   ),
                   MarkerLayer(markers: markers),
-                  if (polylines.isNotEmpty)
-                    PolylineLayer(polylines: polylines),
+                  if (polylines.isNotEmpty) PolylineLayer(polylines: polylines),
                 ],
               ),
             ),
@@ -949,9 +1680,12 @@ extension _DashboardSimulatorScreen on _DashboardScreenState {
                 'Itens / vendedores: ${payload['items_count']} / ${payload['sellers_count']}'),
             Text(
                 'Preço / frete: R\$ ${payload['price']} / R\$ ${payload['freight_value']}'),
-            Text('Compra: ${payload['purchase_at']}'),
-            Text('Despacho: ${payload['dispatched_at']}'),
-            Text('Entrega prometida: ${payload['estimated_delivery_at']}'),
+            Text(
+                'Compra: ${SimulatorDateFormat.format(SimulatorDateFormat.parse(payload['purchase_at'].toString())!)}'),
+            Text(
+                'Despacho: ${SimulatorDateFormat.format(SimulatorDateFormat.parse(payload['dispatched_at'].toString())!)}'),
+            Text(
+                'Entrega prometida: ${SimulatorDateFormat.format(SimulatorDateFormat.parse(payload['estimated_delivery_at'].toString())!)}'),
             const SizedBox(height: 6),
             Text(route['geolocation_source']?.toString() ?? '',
                 style: TextStyle(fontSize: 11, color: _secondaryText)),
@@ -999,7 +1733,7 @@ extension _DashboardSimulatorScreen on _DashboardScreenState {
   }
 
   Widget _comparisonValue(
-      String label, double probability, bool predictedLate) =>
+          String label, double probability, bool predictedLate) =>
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

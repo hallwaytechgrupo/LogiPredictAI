@@ -1199,7 +1199,10 @@ class _AccordionState extends State<_Accordion> {
               color: isDark ? const Color(0xFF172338) : const Color(0xFFF8FAFC),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: widget.content,
+            child: Material(
+              color: Colors.transparent,
+              child: widget.content,
+            ),
           ),
       ],
     );

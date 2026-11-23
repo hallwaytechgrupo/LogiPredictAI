@@ -110,6 +110,7 @@ void main() {
       expect(prediction!['total_weight_g'], 500);
       expect(prediction!['total_volume_cm3'], 1200);
       expect(prediction!.containsKey('status'), isFalse);
+      expect(find.text('70.0%'), findsOneWidget);
       expect(find.text('O modelo classificou risco de atraso'), findsOneWidget);
 
       await tester.ensureVisible(field('Pesquisar por order_id'));
@@ -152,8 +153,9 @@ void main() {
                   });
                 case '/api/v1/predictions':
                   prediction = jsonDecode(request.body) as Map<String, dynamic>;
-                  expect(
-                      request.url.queryParameters['order_id'], 'DEMO-FE04-001');
+                  expect(request.url.queryParameters.containsKey('order_id'),
+                      isFalse);
+                  expect(prediction!.containsKey('order_id'), isFalse);
                   return jsonResponse({
                     'delay_probability': 0.7,
                     'predicted_late': true,

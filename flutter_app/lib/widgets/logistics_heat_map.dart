@@ -184,7 +184,10 @@ class _LogisticsHeatMapState extends State<LogisticsHeatMap> {
             ? Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 SizedBox(
                     width: 310,
-                    child: ColoredBox(color: surface, child: _sidebar())),
+                    child: ColoredBox(
+                        color: surface,
+                        child: Material(
+                            color: Colors.transparent, child: _sidebar()))),
                 const VerticalDivider(width: 1),
                 Expanded(child: map)
               ])

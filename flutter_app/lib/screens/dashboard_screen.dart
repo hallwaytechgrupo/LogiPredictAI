@@ -14,6 +14,11 @@ import 'package:latlong2/latlong.dart';
 import '../services/dispatch_simulation.dart';
 import '../services/dispatch_api.dart';
 import '../services/logipredict_api.dart';
+import '../services/simulator_controller.dart';
+import '../services/simulator_prediction_service.dart';
+import '../services/simulator_scenario.dart';
+import '../services/simulator_sensitivity.dart';
+import '../services/simulator_date_format.dart';
 import '../services/hubs_api.dart';
 import '../services/orders_api.dart';
 import '../services/orders_geography_api.dart';
@@ -48,6 +53,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final _ordersRefreshTrigger = ValueNotifier<int>(0);
 
   bool _isAnalyzing = false;
+  late final SimulatorController _simulatorController;
+  late final SimulatorSensitivityController _sensitivityController;
+  int _analysisRequest = 0;
   List<String> _warnings = [];
   String? _modelVersion;
   List<Map<String, dynamic>> _stateAnalytics = [];
@@ -73,6 +81,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final _itemsCountController = TextEditingController();
   final _declaredValueController = TextEditingController();
   final _freightValueController = TextEditingController();
+  final _alternativeFormKey = GlobalKey<FormState>();
+  final _alternativeOriginController = TextEditingController();
+  final _alternativeDestinationController = TextEditingController();
+  final _alternativePurchaseAtController = TextEditingController();
+  final _alternativeDispatchedAtController = TextEditingController();
+  final _alternativeEstimatedDeliveryAtController = TextEditingController();
+  final _alternativeWeightController = TextEditingController();
+  final _alternativeVolumeController = TextEditingController();
+  final _alternativeItemsCountController = TextEditingController();
+  final _alternativeDeclaredValueController = TextEditingController();
+  final _alternativeFreightValueController = TextEditingController();
+  bool _alternativeVisible = false;
+  bool _alternativeAnalyzing = false;
+  bool _alternativeDirty = false;
+  final _sensitivityStartController = TextEditingController();
+  final _sensitivityEndController = TextEditingController();
+  bool _sensitivityDirty = false;
   final HubsApi _hubsApi = HubsApi();
   final OrdersApi _ordersApi = OrdersApi();
   List<LogisticHub> _mapHubs = [];
@@ -135,6 +160,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _itemsCountController.dispose();
     _declaredValueController.dispose();
     _freightValueController.dispose();
+    _sensitivityStartController.dispose();
+    _sensitivityEndController.dispose();
+    _alternativeOriginController.dispose();
+    _alternativeDestinationController.dispose();
+    _alternativePurchaseAtController.dispose();
+    _alternativeDispatchedAtController.dispose();
+    _alternativeEstimatedDeliveryAtController.dispose();
+    _alternativeWeightController.dispose();
+    _alternativeVolumeController.dispose();
+    _alternativeItemsCountController.dispose();
+    _alternativeDeclaredValueController.dispose();
+    _alternativeFreightValueController.dispose();
     _dispatchMapReady = false;
     super.dispose();
   }
@@ -142,6 +179,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
+    _simulatorController = SimulatorController(
+      SimulatorPredictionService(
+        routeResolver: ({required originCeps, required destinationCep}) =>
+            LogiPredictApi.resolveRoute(
+          originCeps: originCeps,
+          destinationCep: destinationCep,
+        ),
+        predictionCaller: (payload) => LogiPredictApi.predict(payload),
+      ),
+    );
+    _sensitivityController =
+        SimulatorSensitivityController(_simulatorController.predictionService);
     _loadAnalytics();
   }
 
@@ -345,8 +394,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 const SizedBox(height: 4),
                 Text('Categoria provisória: ${hub.provisionalCategory}'),
               ],
-              if (hub.operatorName != null &&
-                  hub.operatorName!.isNotEmpty) ...[
+              if (hub.operatorName != null && hub.operatorName!.isNotEmpty) ...[
                 const SizedBox(height: 4),
                 Text('Operador: ${hub.operatorName}'),
               ],
@@ -368,9 +416,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-
   void _simulationInputsChanged() {
     if (_isAnalyzing) return;
+    _simulatorController.clearSimulation();
+    _sensitivityController.invalidate();
+    _sensitivityDirty = false;
+    _alternativeVisible = false;
+    _alternativeDirty = false;
     setState(() {
       if (_currentScenario != null) {
         _previousScenario = _currentScenario;
@@ -393,8 +445,137 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
+  void _markSensitivityInputsChanged() {
+    if (_sensitivityController.isLoading) return;
+    if (mounted) setState(() => _sensitivityDirty = true);
+  }
+
+  Future<void> _analyzeSensitivity() async {
+    final base = _simulatorController.baseScenario;
+    if (base == null || _sensitivityController.isLoading) return;
+    final start = int.tryParse(_sensitivityStartController.text.trim());
+    final end = int.tryParse(_sensitivityEndController.text.trim());
+    if (start == null || end == null) {
+      setState(() {
+        _sensitivityController.error = const SimulatorPredictionException(
+            'Informe o primeiro e o último prazo em dias.');
+        _sensitivityController.status = SimulatorSensitivityStatus.error;
+      });
+      return;
+    }
+    try {
+      SimulatorSensitivityController.buildDays(start, end);
+    } on FormatException catch (error) {
+      setState(() {
+        _sensitivityController.error =
+            SimulatorPredictionException(error.message);
+        _sensitivityController.status = SimulatorSensitivityStatus.error;
+      });
+      return;
+    }
+    setState(() {
+      _sensitivityDirty = false;
+    });
+    await _sensitivityController.analyze(
+      baseScenario: base,
+      startDay: start,
+      endDay: end,
+    );
+    if (mounted) setState(() {});
+  }
+
+  void _createAlternativeScenario() {
+    if (_simulatorController.baseResult == null) return;
+    final scenario = _simulatorController.createAlternative();
+    _fillAlternativeControllers(scenario);
+    if (mounted)
+      setState(() {
+        _alternativeVisible = true;
+        _alternativeDirty = false;
+      });
+  }
+
+  void _fillAlternativeControllers(SimulatorScenario scenario) {
+    String date(DateTime value) => SimulatorDateFormat.format(value);
+    _alternativeOriginController.text = scenario.originCeps.join(', ');
+    _alternativeDestinationController.text = scenario.destinationCep;
+    _alternativePurchaseAtController.text = date(scenario.purchaseAt);
+    _alternativeDispatchedAtController.text = date(scenario.dispatchedAt);
+    _alternativeEstimatedDeliveryAtController.text =
+        date(scenario.estimatedDeliveryAt);
+    _alternativeWeightController.text = scenario.weightKg.toString();
+    _alternativeVolumeController.text = scenario.volumeCm3?.toString() ?? '';
+    _alternativeItemsCountController.text = scenario.itemsCount.toString();
+    _alternativeDeclaredValueController.text = scenario.price.toString();
+    _alternativeFreightValueController.text = scenario.freightValue.toString();
+  }
+
+  SimulatorScenario _alternativeScenarioFromForm() {
+    final origins =
+        DispatchSimulation.parseOriginCeps(_alternativeOriginController.text);
+    final destination =
+        DispatchSimulation.normalizeCep(_alternativeDestinationController.text);
+    return SimulatorScenario(
+      originCeps: origins,
+      destinationCep: destination,
+      purchaseAt: _parseLocalDateTime(_alternativePurchaseAtController.text)!,
+      dispatchedAt:
+          _parseLocalDateTime(_alternativeDispatchedAtController.text)!,
+      estimatedDeliveryAt:
+          _parseLocalDateTime(_alternativeEstimatedDeliveryAtController.text)!,
+      weightKg: _parseNumber(_alternativeWeightController.text)!,
+      volumeCm3: _alternativeVolumeController.text.trim().isEmpty
+          ? null
+          : _parseNumber(_alternativeVolumeController.text),
+      itemsCount: int.parse(_alternativeItemsCountController.text.trim()),
+      price: _parseNumber(_alternativeDeclaredValueController.text)!,
+      freightValue: _parseNumber(_alternativeFreightValueController.text)!,
+    );
+  }
+
+  Future<void> _analyzeAlternative() async {
+    if (!(_alternativeFormKey.currentState?.validate() ?? false)) return;
+    try {
+      final scenario = _alternativeScenarioFromForm();
+      _simulatorController.updateAlternative(scenario);
+      if (mounted) setState(() => _alternativeAnalyzing = true);
+      await _simulatorController.executeAlternativePrediction();
+      if (!mounted) return;
+      setState(() {
+        _alternativeAnalyzing = false;
+        _alternativeDirty = false;
+      });
+      if (_simulatorController.alternativeResult != null) {
+        _simulatorController.compareScenarios();
+      }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _alternativeAnalyzing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.toString())),
+      );
+    }
+  }
+
+  void _restoreAlternativeScenario() {
+    _simulatorController.restoreAlternative();
+    final scenario = _simulatorController.alternativeScenario;
+    if (scenario == null) return;
+    _fillAlternativeControllers(scenario);
+    if (mounted)
+      setState(() {
+        _alternativeAnalyzing = false;
+        _alternativeDirty = false;
+      });
+  }
+
+  void _alternativeInputsChanged() {
+    if (_alternativeAnalyzing) return;
+    if (mounted) setState(() => _alternativeDirty = true);
+  }
+
   DateTime? _parseLocalDateTime(String input) =>
-      DateTime.tryParse(input.trim().replaceFirst(' ', 'T'));
+      SimulatorDateFormat.parse(input);
 
   String? _requiredDateTime(String? value) {
     if (value == null || value.trim().isEmpty) return 'Informe data e hora.';
@@ -405,7 +586,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   double? _parseNumber(String value) =>
       double.tryParse(value.trim().replaceAll(',', '.'));
 
-  Future<void> _chooseDateTime(TextEditingController controller) async {
+  Future<void> _chooseDateTime(
+    TextEditingController controller, {
+    VoidCallback? onChanged,
+  }) async {
     final current = _parseLocalDateTime(controller.text) ?? DateTime.now();
     final date = await showDatePicker(
       context: context,
@@ -426,19 +610,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
       time.hour,
       time.minute,
     );
-    controller.text =
-        selected.toIso8601String().substring(0, 16).replaceFirst('T', ' ');
-    _simulationInputsChanged();
+    controller.text = SimulatorDateFormat.format(selected);
+    (onChanged ?? _simulationInputsChanged)();
   }
 
   Widget _dateTimeField({
     required TextEditingController controller,
     required String label,
+    VoidCallback? onChanged,
   }) {
     return TextFormField(
       controller: controller,
       readOnly: true,
-      onTap: _isAnalyzing ? null : () => _chooseDateTime(controller),
+      onTap: _isAnalyzing
+          ? null
+          : () => _chooseDateTime(controller, onChanged: onChanged),
       validator: _requiredDateTime,
       decoration: InputDecoration(
         labelText: label,
@@ -473,6 +659,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final itemsCount = int.tryParse(_itemsCountController.text.trim())!;
     final price = _parseNumber(_declaredValueController.text)!;
     final freightValue = _parseNumber(_freightValueController.text)!;
+    final scenario = SimulatorScenario(
+      originCeps: originCeps,
+      destinationCep: destinationCep,
+      purchaseAt: purchaseAt,
+      dispatchedAt: dispatchedAt,
+      estimatedDeliveryAt: estimatedDeliveryAt,
+      weightKg: weightKg,
+      volumeCm3: volumeCm3,
+      itemsCount: itemsCount,
+      price: price,
+      freightValue: freightValue,
+    );
+    _simulatorController.defineBase(scenario);
+    final requestId = ++_analysisRequest;
 
     setState(() {
       if (_currentScenario != null) {
@@ -496,19 +696,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
 
     // Run prediction and dispatch simulation independently
-    final orderId = _selectedOrder?['order_id']?.toString();
     final predictionFuture = _runPrediction(
-      originCeps: originCeps,
-      destinationCep: destinationCep,
-      purchaseAt: purchaseAt,
-      dispatchedAt: dispatchedAt,
-      estimatedDeliveryAt: estimatedDeliveryAt,
-      weightKg: weightKg,
-      volumeCm3: volumeCm3,
-      itemsCount: itemsCount,
-      price: price,
-      freightValue: freightValue,
-      orderId: orderId,
+      scenario: scenario,
     );
 
     // Use the first origin CEP for dispatch simulation
@@ -521,7 +710,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final predictionResult = await predictionFuture;
     final dispatchResult = await dispatchFuture;
 
-    if (!mounted) return;
+    if (!mounted || requestId != _analysisRequest) return;
 
     // Apply prediction result
     if (predictionResult != null) {
@@ -554,81 +743,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   /// Runs the ML prediction and returns the result, or null on error.
   Future<Map<String, dynamic>?> _runPrediction({
-    required List<String> originCeps,
-    required String destinationCep,
-    required DateTime purchaseAt,
-    required DateTime dispatchedAt,
-    required DateTime estimatedDeliveryAt,
-    required double weightKg,
-    required double? volumeCm3,
-    required int itemsCount,
-    required double price,
-    required double freightValue,
-    String? orderId,
+    required SimulatorScenario scenario,
   }) async {
     try {
-      final route = await LogiPredictApi.resolveRoute(
-        originCeps: originCeps,
-        destinationCep: destinationCep,
-      );
-      final payload = DispatchSimulation.buildPayload(
-        purchaseAt: purchaseAt,
-        dispatchedAt: dispatchedAt,
-        estimatedDeliveryAt: estimatedDeliveryAt,
-        totalWeightG: weightKg * 1000,
-        totalVolumeCm3: volumeCm3,
-        itemsCount: itemsCount,
-        price: price,
-        freightValue: freightValue,
-        route: route,
-      );
-
-      final result = await LogiPredictApi.predict(payload, orderId: orderId);
-      final probabilityValue = result['delay_probability'];
-      final predictedLateValue = result['predicted_late'];
-      final thresholdValue = result['threshold'];
-      if (probabilityValue is! num ||
-          predictedLateValue is! bool ||
-          thresholdValue is! num) {
-        throw const FormatException(
-          'Resposta incompleta: eram esperados score, decisão e limiar do modelo.',
-        );
-      }
-      final probability = probabilityValue.toDouble();
-      final threshold = thresholdValue.toDouble();
-      if (!probability.isFinite ||
-          probability < 0 ||
-          probability > 1 ||
-          !threshold.isFinite ||
-          threshold < 0 ||
-          threshold > 1) {
-        throw const FormatException(
-          'O modelo retornou score ou limiar fora do intervalo de 0 a 1.',
-        );
-      }
-      final warningsRaw = result['warnings'];
-      final warnings = warningsRaw is List
-          ? warningsRaw.map((item) => item.toString()).toList()
-          : <String>[];
-      if (result['synthetic'] == true &&
-          !warnings
-              .any((warning) => warning.toLowerCase().contains('sintético'))) {
-        warnings.add(
-            'Esta resposta veio de um modelo treinado com dados sintéticos.');
-      }
+      final execution = await _simulatorController.executeBasePrediction();
+      if (execution == null) return null;
+      final predictionExecution = _simulatorController.baseExecution;
+      if (predictionExecution == null) return null;
+      final controllerResult = _simulatorController.baseResult!;
+      final response = {
+        'delay_probability': controllerResult.delayProbability,
+        'predicted_late': controllerResult.predictedLate,
+        'threshold': controllerResult.threshold,
+        'model_version': controllerResult.modelVersion,
+        'source': controllerResult.source,
+        'synthetic': controllerResult.synthetic,
+        'warnings': controllerResult.warnings,
+      };
 
       return {
-        'scenario': {'payload': payload, 'route': route, 'response': result},
+        'scenario': {
+          'payload': predictionExecution.payload,
+          'route': predictionExecution.route,
+          'response': response,
+        },
         'lastAttempt': null,
-        'probability': probability,
-        'predictedLate': predictedLateValue,
-        'riskTitle': predictedLateValue
+        'probability': controllerResult.delayProbability,
+        'predictedLate': controllerResult.predictedLate,
+        'riskTitle': controllerResult.predictedLate
             ? 'O modelo classificou risco de atraso'
             : 'O modelo não classificou atraso acima do limiar',
         'riskDescription': 'Estimativa de risco, não garantia de atraso.',
-        'modelVersion': result['model_version']?.toString(),
-        'threshold': threshold,
-        'warnings': warnings,
+        'modelVersion': controllerResult.modelVersion,
+        'threshold': controllerResult.threshold,
+        'warnings': controllerResult.warnings,
       };
     } catch (error) {
       // Store error in state directly
@@ -717,9 +865,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// Formats an ISO datetime to the picker display format (YYYY-MM-DD HH:MM).
   String _formatDateTime(String? raw) {
     if (raw == null || raw.isEmpty) return '';
-    final parsed = DateTime.tryParse(raw.trim().replaceFirst(' ', 'T'));
+    final parsed = SimulatorDateFormat.parse(raw);
     if (parsed == null) return raw.trim();
-    return parsed.toIso8601String().substring(0, 16).replaceFirst('T', ' ');
+    return SimulatorDateFormat.format(parsed);
   }
 
   Future<void> _selectOrder(Map<String, dynamic> order) async {
@@ -759,7 +907,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final dispatchedAt = order['dispatched_at']?.toString().trim();
     _dispatchedAtController.text = _formatDateTime(dispatchedAt);
 
-    final estimatedDeliveryAt = order['estimated_delivery_at']?.toString().trim();
+    final estimatedDeliveryAt =
+        order['estimated_delivery_at']?.toString().trim();
     _estimatedDeliveryAtController.text = _formatDateTime(estimatedDeliveryAt);
 
     // Fill numeric fields
@@ -786,7 +935,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _riskProbability = null;
       _predictedLate = null;
       _riskTitle = 'Pedido selecionado';
-      _riskDescription = 'Dados carregados do pedido ${order['order_id']}. Execute a simulação para obter resultados.';
+      _riskDescription =
+          'Dados carregados do pedido ${order['order_id']}. Execute a simulação para obter resultados.';
       _warnings = [];
       _modelVersion = null;
       _lastThreshold = null;
@@ -832,7 +982,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (destZip == null || destZip.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Pedido sem CEP de destino para associação.')),
+          const SnackBar(
+              content: Text('Pedido sem CEP de destino para associação.')),
         );
       }
       return;
@@ -844,7 +995,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         context: context,
         barrierDismissible: false,
         builder: (_) => const Center(
-          child: Card(child: Padding(
+          child: Card(
+              child: Padding(
             padding: EdgeInsets.all(24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -868,7 +1020,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final hub = data?['hub'] as Map<String, dynamic>?;
 
       if (hub != null && hub['id'] != null) {
-        await _ordersApi.setHub(order['order_id'].toString(), hub['id'].toString());
+        await _ordersApi.setHub(
+            order['order_id'].toString(), hub['id'].toString());
         if (mounted) {
           Navigator.of(context).pop(); // Close loading dialog
           setState(() {
@@ -879,7 +1032,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               'hub': hub,
             };
           });
-          final hubName = hub['name']?.toString() ?? hub['code']?.toString() ?? 'Hub';
+          final hubName =
+              hub['name']?.toString() ?? hub['code']?.toString() ?? 'Hub';
           final distance = data?['distance_km']?.toString() ?? '';
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -901,7 +1055,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           } else if (errorType == 'NO_HUBS_AVAILABLE') {
             errorMessage = 'Nenhum hub ativo e aprovado disponível no sistema.';
           } else if (errorType == 'NO_ELIGIBLE_HUBS') {
-            errorMessage = 'Nenhum hub com coordenadas válidas encontrado para esta região.';
+            errorMessage =
+                'Nenhum hub com coordenadas válidas encontrado para esta região.';
           }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(errorMessage)),
@@ -939,7 +1094,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             const Spacer(),
             Switch(
               value: _useImportedOrder,
-              onChanged: _isAnalyzing || _loadingSelectedOrder ? null : _toggleOrderSelectionMode,
+              onChanged: _isAnalyzing || _loadingSelectedOrder
+                  ? null
+                  : _toggleOrderSelectionMode,
             ),
           ],
         ),
@@ -965,7 +1122,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.check_circle, color: Colors.green, size: 18),
+                      const Icon(Icons.check_circle,
+                          color: Colors.green, size: 18),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
@@ -979,7 +1137,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                       TextButton(
                         onPressed: _isAnalyzing ? null : _clearSelectedOrder,
-                        child: const Text('Limpar', style: TextStyle(fontSize: 12)),
+                        child: const Text('Limpar',
+                            style: TextStyle(fontSize: 12)),
                       ),
                     ],
                   ),
@@ -994,32 +1153,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       padding: const EdgeInsets.only(top: 6),
                       child: Row(
                         children: [
-                          const Icon(Icons.warning_amber, color: Colors.orange, size: 16),
+                          const Icon(Icons.warning_amber,
+                              color: Colors.orange, size: 16),
                           const SizedBox(width: 6),
                           const Text(
                             'Sem hub associado. ',
-                            style: TextStyle(color: Colors.orange, fontSize: 12),
+                            style:
+                                TextStyle(color: Colors.orange, fontSize: 12),
                           ),
                           TextButton(
-                            onPressed: () => _associateOrderHub(_selectedOrder!),
-                            child: const Text('Associar agora', style: TextStyle(fontSize: 12)),
+                            onPressed: () =>
+                                _associateOrderHub(_selectedOrder!),
+                            child: const Text('Associar agora',
+                                style: TextStyle(fontSize: 12)),
                           ),
                         ],
                       ),
                     ),
-                  if ((_selectedOrder!['hub_id'] ?? '').toString().isNotEmpty) ...() {
-                    final hub = _selectedOrder!['hub'] as Map<String, dynamic>?;
-                    final hubCode = hub?['code']?.toString() ?? _selectedOrder!['hub_id'].toString();
-                    return [
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          'Hub: $hubCode',
-                          style: TextStyle(fontSize: 12, color: _secondaryText),
+                  if ((_selectedOrder!['hub_id'] ?? '').toString().isNotEmpty)
+                    ...() {
+                      final hub =
+                          _selectedOrder!['hub'] as Map<String, dynamic>?;
+                      final hubCode = hub?['code']?.toString() ??
+                          _selectedOrder!['hub_id'].toString();
+                      return [
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            'Hub: $hubCode',
+                            style:
+                                TextStyle(fontSize: 12, color: _secondaryText),
+                          ),
                         ),
-                      ),
-                    ];
-                  }(),
+                      ];
+                    }(),
                 ],
               ),
             ),
@@ -1030,8 +1197,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             decoration: InputDecoration(
               labelText: 'Pesquisar por order_id',
               prefixIcon: const Icon(Icons.search, size: 20),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
               isDense: true,
             ),
             onChanged: (value) {
@@ -1050,7 +1219,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               padding: EdgeInsets.symmetric(vertical: 12),
               child: Row(
                 children: [
-                  SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                  SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2)),
                   SizedBox(width: 8),
                   Text('Carregando dados do pedido...'),
                 ],
@@ -1083,9 +1255,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
               return Material(
                 color: Colors.transparent,
                 child: InkWell(
-                  onTap: _isAnalyzing || _loadingSelectedOrder ? null : () => _selectOrder(order),
+                  onTap: _isAnalyzing || _loadingSelectedOrder
+                      ? null
+                      : () => _selectOrder(order),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
                     decoration: BoxDecoration(
                       border: Border.all(color: _border),
                       borderRadius: BorderRadius.circular(8),
@@ -1094,7 +1269,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     margin: const EdgeInsets.only(bottom: 4),
                     child: Row(
                       children: [
-                        Icon(Icons.receipt_long, size: 18,
+                        Icon(Icons.receipt_long,
+                            size: 18,
                             color: hasHub ? Colors.green : Colors.orange),
                         const SizedBox(width: 10),
                         Expanded(
@@ -1103,11 +1279,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             children: [
                               Text(orderId,
                                   style: const TextStyle(
-                                      fontWeight: FontWeight.w500, fontSize: 13)),
+                                      fontWeight: FontWeight.w500,
+                                      fontSize: 13)),
                               Text(
                                 'Origem: ${_formatCep(originZip)} → Destino: ${_formatCep(destZip)}'
                                 '${hasHub ? ' | Hub: $hubLabel' : ' | Sem hub'}',
-                                style: TextStyle(fontSize: 11, color: _secondaryText),
+                                style: TextStyle(
+                                    fontSize: 11, color: _secondaryText),
                               ),
                             ],
                           ),
@@ -1265,11 +1443,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 setState(() {
                   _tab = i;
                 });
-                if (i == 1 &&
-                    !wasOnMap &&
-                    !_loadingMapHubs) {
+                if (i == 1 && !wasOnMap && !_loadingMapHubs) {
                   _loadMapHubs();
-                  if (_regionOrderData.isEmpty && !_loadingRegions) _loadRegions();
+                  if (_regionOrderData.isEmpty && !_loadingRegions)
+                    _loadRegions();
                 }
                 // Refresh OrdersScreen when navigating to it
                 if (i == 2 && !wasOnOrders) {

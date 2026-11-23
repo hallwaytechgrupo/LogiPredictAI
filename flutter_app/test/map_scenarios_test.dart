@@ -60,15 +60,27 @@ Future<void> mount(WidgetTester tester, MapScenariosApi api) async {
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
-  await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-          body: MapWorkspaceScreen(
-              active: true,
-              api: api,
-              historyBuilder: (active) => active
-                  ? const Text('Histórico exibido')
-                  : const SizedBox.shrink()))));
-  await tester.pumpAndSettle();
+  await http.runWithClient(() async {
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: MapWorkspaceScreen(
+                active: true,
+                api: api,
+                historyBuilder: (active) => active
+                    ? const Text('Histórico exibido')
+                    : const SizedBox.shrink()))));
+    await tester.pumpAndSettle();
+  }, () => MockClient((request) async {
+        if (request.url.host == 'tile.openstreetmap.org') {
+          return http.Response.bytes(
+            base64Decode(
+                'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='),
+            200,
+            headers: {'content-type': 'image/png'},
+          );
+        }
+        return http.Response('', 404);
+      }));
 }
 
 void main() {

@@ -533,13 +533,16 @@ class _PredictionMapScreenState extends State<PredictionMapScreen> {
   @override
   Widget build(BuildContext context) => LayoutBuilder(builder: (context, c) {
         final sidebar = ColoredBox(
-            color: Theme.of(context).colorScheme.surface, child: _sidebar());
+            color: Theme.of(context).colorScheme.surface,
+            child: Material(color: Colors.transparent, child: _sidebar()));
+        final resultPanel = Material(
+            color: Colors.transparent, child: _resultPanel());
         if (c.maxWidth < 900) {
           return SingleChildScrollView(
               child: Column(children: [
             SizedBox(height: 430, child: _mapArea()),
             sidebar,
-            _resultPanel()
+            resultPanel
           ]));
         }
         return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -552,7 +555,7 @@ class _PredictionMapScreenState extends State<PredictionMapScreen> {
             ConstrainedBox(
                 constraints: BoxConstraints(
                     maxHeight: _result == null ? 110 : c.maxHeight * .46),
-                child: SingleChildScrollView(child: _resultPanel())),
+                child: SingleChildScrollView(child: resultPanel)),
           ])),
         ]);
       });
