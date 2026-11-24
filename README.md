@@ -329,6 +329,8 @@ O desenvolvimento foi acompanhado no **EntregaLab**, nossa ferramenta de gestão
 
 </details>
 
+[EntregaLab](https://entregalab-yoes.onrender.com/)
+
 O fluxo de trabalho segue Scrum, com backlog priorizado e entregas incrementais ([backlog](docs/backlog.md) · [cronograma](docs/cronograma-entregalab.md)).
 
 ## 👥 Equipe
