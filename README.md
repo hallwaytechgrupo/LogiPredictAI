@@ -559,6 +559,9 @@ A aplicação também dispõe de implantação gerenciada com frontend Flutter W
 API Node.js e inferência Python em serviços independentes, além de PostgreSQL
 separado no Neon. O mapa mantém os pesos do modelo **564 + filtro contextual**.
 
+**Acesso público:** [LogiPredict AI](https://logipredict-ai-abp.pages.dev),
+com interface hospedada no Cloudflare Pages.
+
 Consulte o [guia de implantação e testes na nuvem](docs/nuvem.md) para os
 endereços, configuração do APK, persistência e limites das franquias gratuitas.
 As instruções de execução local continuam disponíveis neste README.

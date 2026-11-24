@@ -1,8 +1,10 @@
 {
   "api_url": "https://igors-lima12--logipredict-cloud-api.us-east.modal.run",
   "ml_url": "https://igors-lima12--logipredict-cloud-model-service.us-east.modal.run",
-  "frontend_url": "https://logipredict-ai-demo.ulysseslima.chatgpt.site",
-  "frontend_project_id": "appgprj_6b05d03cc9548191b1394d0ef098f14e",
+  "frontend_url": "https://logipredict-ai-abp.pages.dev",
+  "frontend_provider": "cloudflare-pages",
+  "frontend_project_name": "logipredict-ai-abp",
+  "sites_project_id": "appgprj_6b05d03cc9548191b1394d0ef098f14e",
   "database_project_id": "falling-sky-31696005",
   "database_branch_id": "br-icy-forest-bbdiz6qs",
   "validation_branch_id": "br-winter-river-bb2mim7m",

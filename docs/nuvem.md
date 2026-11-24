@@ -5,7 +5,7 @@ local pode ficar desligado quando o usuário escolhe o servidor da nuvem.
 
 | Componente | Serviço | Responsabilidade |
 | --- | --- | --- |
-| Flutter Web | Hospedagem estática do Sites | Entrega os arquivos da interface por HTTPS |
+| Flutter Web | Cloudflare Pages | Entrega os arquivos da interface por HTTPS |
 | API Node.js | Modal | Valida requisições, administra pedidos e consulta rotas e ML |
 | Inferência Python | Modal, função independente | Carrega os pesos preservados e executa previsões |
 | PostgreSQL | Neon Free | Persiste hubs, pedidos e histórico de previsões |
@@ -18,12 +18,14 @@ O primeiro acesso após inatividade pode levar mais tempo.
 
 ## Endereços
 
-- Frontend: <https://logipredict-ai-demo.ulysseslima.chatgpt.site>
+- Frontend público: <https://logipredict-ai-abp.pages.dev>
 - API: <https://igors-lima12--logipredict-cloud-api.us-east.modal.run>
 - Saúde da API: <https://igors-lima12--logipredict-cloud-api.us-east.modal.run/health>
 - Disponibilidade do modelo: <https://igors-lima12--logipredict-cloud-api.us-east.modal.run/ready>
 
-O acesso ao frontend depende da configuração de compartilhamento do Site.
+O frontend abre sem login e usa o domínio gratuito `pages.dev`. A mudança de
+endereço afeta somente a interface; API, modelos e banco continuam nos mesmos
+serviços. A API aceita o endereço do Pages na sua lista explícita de origens.
 GitHub Pages permanece como alternativa em `.github/workflows/pages.yml`.
 Sua ativação exige permissão administrativa no repositório e a variável
 `CLOUD_API_URL` com o endereço da API. A credencial de desenvolvimento atual
@@ -31,7 +33,7 @@ tem permissão de push, mas não de administração do Pages.
 
 ## Custo e disponibilidade
 
-Nenhum plano pago foi contratado. O Neon foi confirmado no plano Free. Na
+Nenhum plano pago foi contratado. Cloudflare Pages e Neon usam os planos Free. Na
 conta Modal usada nesta entrega, o painel mostrou **US$ 1 de crédito/limite**,
 sem forma de pagamento cadastrada. Portanto, não se deve contar com US$ 30
 mensais sem conferir os créditos efetivamente concedidos à conta.
@@ -98,11 +100,22 @@ cd flutter_app
 flutter build web --release --no-web-resources-cdn --dart-define=API_BASE_URL=https://igors-lima12--logipredict-cloud-api.us-east.modal.run
 ```
 
-A publicação estática deve reutilizar o Site identificado em
-`deploy/cloud/deployment.json`. Os arquivos compilados e o manifesto da
-publicação atual estão no checkout local
-`reports/local/cloud-frontend-20261124`. Novas versões exigem recompilar,
-sincronizar esse checkout e publicar seus arquivos atualizados.
+Na pasta `flutter_app`, publique somente o conteúdo de `build/web` no projeto
+Pages existente. Em outro computador, faça a autorização pelo navegador antes
+do primeiro envio:
+
+```powershell
+npx.cmd --yes wrangler@4.168.0 login --scopes account:read user:read pages:write
+npx.cmd --yes wrangler@4.168.0 pages deploy build/web --project-name logipredict-ai-abp --branch main
+```
+
+O projeto já existe; reutilize `logipredict-ai-abp` nas atualizações. O envio
+direto não compila o Flutter nem acompanha novos commits automaticamente:
+recompile e publique para atualizar a versão disponível ao público. Os arquivos
+de entrada têm revalidação de cache configurada em `flutter_app/web/_headers`.
+Nenhuma senha ou chave do backend deve ser adicionada ao diretório publicado.
+O identificador da primeira hospedagem fica preservado em
+`deploy/cloud/deployment.json` para consulta.
 
 ## Testar no navegador e no Android
 
@@ -127,6 +140,9 @@ O endereço local salvo anteriormente só muda quando o usuário salva o novo.
   os três testes dessa execução passaram.
 - Python: 58 testes aprovados, incluindo proteção do serviço ML e cenários.
 - Flutter Web: build de produção apontando para a API HTTPS.
+- Cloudflare Pages: acesso anônimo à interface, scripts, página Leaflet e
+  GeoJSON confirmado; o preflight aceitou a nova origem e a previsão real
+  retornou `modelo_564_filter` com quatro alternativas.
 - Requisições reais na nuvem: saúde, modelo 564, previsão de compra futura,
   histórico, preflight CORS e rota OpenRouteService.
 - A previsão futura retornou `modelo_564_filter`, classificação e quatro
@@ -140,4 +156,4 @@ ainda deve ser testado fisicamente com o endereço da nuvem salvo no celular.
 Referências: [Modal Web Functions](https://modal.com/docs/guide/webhooks),
 [limites de cobrança](https://modal.com/docs/guide/budgets),
 [planos Neon](https://neon.com/docs/introduction/plans) e
-[GitHub Pages](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages).
+[Cloudflare Pages](https://developers.cloudflare.com/pages/get-started/direct-upload/).
