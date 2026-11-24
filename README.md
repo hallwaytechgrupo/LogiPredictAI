@@ -9,6 +9,8 @@ Flutter Web · Leaflet · Node.js · FastAPI · Random Forest · CatBoost
 
 [Começar](#como-executar-esta-versão) · [Mapa](#mapa-planejar-uma-compra-futura) · [Modelos e resultados](#modelos-finais-e-resultados) · [Guia da demonstração](docs/mapa-e-demonstracao.md) · [Preparação da feira](docs/entrega-final-abp.md)
 
+[Aplicativo Android e APK](docs/android-apk.md)
+
 </div>
 
 > **Versão atual:** a `main` reúne a aplicação, o mapa logístico, os dois
@@ -21,6 +23,7 @@ Flutter Web · Leaflet · Node.js · FastAPI · Random Forest · CatBoost
 | --- | --- |
 | **Planejamento de entregas** | Simulação de uma compra futura com datas, origem, destino, peso, volume, quantidade e valores |
 | **Mapa interativo** | Leaflet com ruas/cidades do OpenStreetMap, formulário à esquerda e classificação da entrega |
+| **Trajeto rodoviário** | Percurso por estradas no Web e no Android, distância e tempo de direção pelo OpenRouteService, com cache no backend |
 | **Histórico regional** | Atrasos observados na Olist por região e UF, com hubs cadastrados no mapa |
 | **Comparação de alternativas** | Novas previsões ao variar o despacho ou o prazo, com indicação de feriados no intervalo |
 | **Aprendizagem de máquina** | Modelo 564 + filtro utilizado pelo novo mapa; modelo 613 + filtro preservado para comparação |
@@ -81,6 +84,11 @@ futura não recalcula a avaliação dos 19.258 pedidos antigos. Zoom e arraste
 ficam sob controle do Leaflet, sem repassar movimentos do mouse ao Flutter.
 As ruas do OpenStreetMap precisam de internet; a biblioteca Leaflet é local.
 
+O planejamento também permite visualizar o percurso pelas estradas. Consulte
+o [guia de rotas rodoviárias](docs/rotas-rodoviarias.md) para configurar o
+OpenRouteService e testar a consulta. A distância rodoviária complementa a
+visualização; os atributos usados pelo modelo preservado continuam iguais.
+
 ## Modelos finais e resultados
 
 A avaliação preservada contém **19.258 pedidos, sendo 704 atrasos reais**.
@@ -140,6 +148,28 @@ Se os serviços já estavam abertos antes da atualização, encerre-os e inicie-
 novamente com os comandos do guia. Use **Ctrl+Shift+R** no navegador para
 recarregar os arquivos atuais. Para demonstração no Web, o comando Flutter
 inclui `--release`.
+
+## Aplicativo Android
+
+A interface também funciona como aplicativo Android, com navegação inferior,
+formulários adaptados ao celular e mapa nativo. O endereço do servidor pode ser
+configurado no cabeçalho do aplicativo para conexão por USB, Wi-Fi ou HTTPS.
+O Web mantém o mapa Leaflet e os endereços definidos no build.
+
+Para gerar o APK na pasta `flutter_app`:
+
+```powershell
+flutter pub get
+flutter build apk --release --dart-define=API_BASE_URL=http://127.0.0.1:3001
+```
+
+O arquivo fica em `flutter_app/build/app/outputs/flutter-apk/app-release.apk`.
+No celular, o APK substitui o Flutter Web; os serviços Node.js e Python
+continuam necessários no computador ou servidor. O build de demonstração usa
+a chave de desenvolvimento local. A publicação em loja exige assinatura própria.
+
+O [guia Android](docs/android-apk.md) explica instalação, conexão com a API,
+requisitos, testes e limitações.
 
 ## API, validação e apresentação
 
@@ -522,3 +552,13 @@ O projeto adota **Scrum**, com backlog priorizado, entregas incrementais, acompa
 **Professor Focal Point:** Leandro Toss Hoffmann.
 
 </details>
+
+## Execução em nuvem
+
+A aplicação também dispõe de implantação gerenciada com frontend Flutter Web,
+API Node.js e inferência Python em serviços independentes, além de PostgreSQL
+separado no Neon. O mapa mantém os pesos do modelo **564 + filtro contextual**.
+
+Consulte o [guia de implantação e testes na nuvem](docs/nuvem.md) para os
+endereços, configuração do APK, persistência e limites das franquias gratuitas.
+As instruções de execução local continuam disponíveis neste README.

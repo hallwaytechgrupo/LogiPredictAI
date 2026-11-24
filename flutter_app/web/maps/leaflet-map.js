@@ -12,13 +12,20 @@
   let tileFailed = false;
   tiles.on('tileerror', () => { tileFailed = true; status.textContent = 'Sem acesso às ruas. As regiões e os pontos continuam disponíveis.'; });
   const overlays = L.layerGroup().addTo(map);
-  let polygons, geography, current, fitToken;
+  let polygons, geography, current, fitToken, roadAttributed = false;
+  const roadAttribution = '© <a href="https://openrouteservice.org/" target="_blank" rel="noopener">openrouteservice.org by HeiGIT</a>';
   const palette = { Baixo:'#15803d', Médio:'#d97706', Alto:'#dc2626' };
   const regionColors = { Norte:'#22c55e', Nordeste:'#ef4444', 'Centro-Oeste':'#3b82f6', Sudeste:'#f97316', Sul:'#a855f7' };
   const centroids = { Norte:[-5,-55], Nordeste:[-8,-39], 'Centro-Oeste':[-14,-50], Sudeste:[-21,-45], Sul:[-28,-52] };
   function text(tag, value) { const node = document.createElement(tag); node.textContent = String(value ?? ''); return node; }
   function popup(lines) { const box = document.createElement('div'); lines.forEach((line, i) => { box.append(text(i ? 'div' : 'strong', line)); }); return box; }
   function coordinate(p) { return p && Number.isFinite(p.latitude) && Number.isFinite(p.longitude) ? [p.latitude,p.longitude] : null; }
+  function roadPoints(config) {
+    const geometry = config?.roadRoute?.geometry;
+    if (geometry?.type !== 'LineString' || !Array.isArray(geometry.coordinates) || geometry.coordinates.length < 2) return [];
+    if (!geometry.coordinates.every(p => Array.isArray(p) && Number.isFinite(p[0]) && Math.abs(p[0]) <= 180 && Number.isFinite(p[1]) && Math.abs(p[1]) <= 90)) return [];
+    return geometry.coordinates.map(p => [p[1],p[0]]);
+  }
   function color(rate) { return rate > 30 ? '#b91c1c' : rate > 20 ? '#ea580c' : rate > 10 ? '#d97706' : '#15803d'; }
   function point(p, label, fill) {
     const at = coordinate(p); if (!at) return;
@@ -44,7 +51,7 @@
   }
   function fit() {
     const a=coordinate(current?.origin), b=coordinate(current?.destination);
-    if (a && b) map.fitBounds([a,b], { padding:[65,65], maxZoom:11, animate:false });
+    if (a && b) map.fitBounds([a,b,...roadPoints(current)], { padding:[65,65], maxZoom:11, animate:false });
     else if (current?.focus && polygons) {
       const features = geography.features.filter(f => f.properties.name === current.focus);
       if (features.length) map.fitBounds(L.geoJSON(features).getBounds(), { padding:[35,35], animate:false });
@@ -62,14 +69,21 @@
       }
     } else {
       const fill=palette[config.risk] || '#2563eb';
-      const a=coordinate(config.origin), b=coordinate(config.destination);
-      if (a && b) L.polyline([a,b], { color:fill, weight:4, opacity:.85, interactive:false }).addTo(overlays);
+      const route=roadPoints(config);
+      if (route.length >= 2) L.polyline(route, { color:fill, weight:4, opacity:.85, interactive:false }).addTo(overlays);
       point(config.origin, 'O', '#2563eb'); point(config.destination, 'D', fill);
     }
     if (fitToken !== config.fitToken) { fitToken=config.fitToken; fit(); }
     if (!tileFailed) status.textContent = config.mode === 'history' ? 'Histórico por região · clique nos nomes para ver os estados' : 'Arraste para explorar · O: origem · D: destino';
     status.dataset.renderMs=(performance.now()-started).toFixed(1);
     status.dataset.mode=config.mode;
+    const routeSize=config.mode === 'history' ? 0 : roadPoints(config).length;
+    status.dataset.routePoints=routeSize;
+    if ((routeSize >= 2) !== roadAttributed) {
+      roadAttributed = routeSize >= 2;
+      if (roadAttributed) map.attributionControl.addAttribution(roadAttribution);
+      else map.attributionControl.removeAttribution(roadAttribution);
+    }
   }
   window.addEventListener('message', event => {
     if (event.origin !== location.origin || event.source !== parent || typeof event.data !== 'string') return;

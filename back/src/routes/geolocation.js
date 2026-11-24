@@ -48,7 +48,7 @@ router.post('/nearest-hub', async (req, res) => {
   try {
     // Buscar hubs ativos
     const hubs = await listActiveHubs();
-    if (hubs.length === 0) {
+    if (hubs.length === 0 && !req.app.locals.store) {
       // Fallback: ler do JSON (deve ser raro, pois listActiveHubs já faz fallback)
       const { readFile } = await import('node:fs/promises');
       const hubsFile = process.env.HUBS_FILE || `${process.cwd()}/data/hubs/hubs.json`;

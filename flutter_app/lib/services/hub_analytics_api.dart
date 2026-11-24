@@ -10,6 +10,7 @@ library;
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'api_configuration.dart';
 
 /// Agregação de previsões de risco para um hub específico.
 ///
@@ -148,22 +149,13 @@ Map<String, HubRiskAggregate> indexHubRiskAggregates(
 ///
 /// Consulta GET /api/v1/analytics/hubs e retorna [HubAnalyticsResponse].
 class HubAnalyticsApi {
-  static const String _defaultBaseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'http://127.0.0.1:3001',
-  );
-
   HubAnalyticsApi({
     http.Client? client,
     String? baseUrl,
     Duration timeout = const Duration(seconds: 15),
   })  : _client = client ?? http.Client(),
         _timeout = timeout,
-        _baseUrl = (baseUrl ??
-                const String.fromEnvironment(
-                  'LOGIPREDICT_API_URL',
-                  defaultValue: _defaultBaseUrl,
-                ))
+        _baseUrl = (baseUrl ?? ApiConfiguration.legacyBaseUrl())
             .replaceFirst(RegExp(r'/$'), '');
 
   final http.Client _client;

@@ -1,7 +1,7 @@
 name: logipredict_ai
 description: Aplicativo Flutter LogiPredict AI para simulacao de risco logistico.
 publish_to: "none"
-version: 1.0.0+1
+version: 1.0.1+2
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -15,9 +15,12 @@ dependencies:
   http: ^1.6.0
   web: ^1.1.1
   file_picker: ^11.0.3
+  shared_preferences: ^2.5.6
 
 dev_dependencies:
   flutter_test:
+    sdk: flutter
+  integration_test:
     sdk: flutter
   flutter_lints: ^4.0.0
 

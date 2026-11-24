@@ -9,6 +9,7 @@ Expõe uma API FastAPI com os seguintes endpoints:
 O modelo é carregado uma vez na inicialização a partir do arquivo model.joblib
 gerado pelo módulo train. Não aceita uploads de modelo em tempo de execução.
 """
+import hmac
 import json
 import os
 from contextlib import asynccontextmanager
@@ -16,10 +17,11 @@ from pathlib import Path
 
 import joblib
 import pandas as pd
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 
-from .schema import Shipment, feature_frame
 from .map_scenarios import router as map_router
+from .schema import Shipment, feature_frame
 
 
 def create_app(model_dir=None):
@@ -53,6 +55,16 @@ def create_app(model_dir=None):
         yield
 
     app = FastAPI(title="LogiPredict ML — serviço interno", version="0.1.0", lifespan=lifespan)
+    service_token = os.getenv("ML_SERVICE_TOKEN", "")
+
+    @app.middleware("http")
+    async def internal_auth(request: Request, call_next):
+        if service_token and not hmac.compare_digest(
+            request.headers.get("authorization", ""), f"Bearer {service_token}"
+        ):
+            return JSONResponse({"detail": "Acesso restrito ao serviço de previsão."}, status_code=401)
+        return await call_next(request)
+
     app.include_router(map_router)
 
     def bundle():

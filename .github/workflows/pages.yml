@@ -1,0 +1,51 @@
+name: Publicar Flutter Web
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["flutter_app/**", ".github/workflows/pages.yml"]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: vars.CLOUD_API_URL != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - name: Instalar Flutter
+        run: |
+          git clone --depth 1 --branch 3.41.9 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - name: Compilar aplicação
+        working-directory: flutter_app
+        env:
+          API_URL: ${{ vars.CLOUD_API_URL }}
+          REPOSITORY_NAME: ${{ github.event.repository.name }}
+        run: |
+          test "${API_URL#https://}" != "$API_URL" || { echo "CLOUD_API_URL precisa usar HTTPS"; exit 1; }
+          flutter pub get
+          flutter build web --release --base-href "/$REPOSITORY_NAME/" --dart-define="API_BASE_URL=$API_URL" --no-web-resources-cdn
+          touch build/web/.nojekyll
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: flutter_app/build/web
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publicar site
+        id: deployment
+        uses: actions/deploy-pages@v4

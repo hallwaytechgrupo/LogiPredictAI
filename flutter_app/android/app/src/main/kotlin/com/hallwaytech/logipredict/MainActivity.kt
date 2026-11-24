@@ -1,4 +1,4 @@
-package com.example.front
+package com.hallwaytech.logipredict
 
 import io.flutter.embedding.android.FlutterActivity
 

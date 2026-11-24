@@ -74,6 +74,7 @@ function parseDate(value, fieldName) {
  * Lê ou inicializa o arquivo orders.json.
  */
 async function readOrdersJson(req) {
+  if (req.app.locals.store) return req.app.locals.readOrders();
   const { readFile } = await import('node:fs/promises');
   const ordersFile = (req.app && req.app.locals && req.app.locals.ordersFile)
     || process.env.ORDERS_FILE
@@ -179,6 +180,7 @@ router.post('/import', (req, res) => req.app.locals.serializeOrderMutation(async
     })), total: results.length });
   } catch (error) {
     console.error('Falha no import legacy:', error.message, error.stack);
+    if (error.code === 'STORAGE_CONFLICT') return res.status(409).json({ error: error.code, message: error.message });
     return res.status(500).json({ error: 'ORDER_STORAGE_ERROR', message: 'Não foi possível importar os pedidos.' });
   }
 }));
@@ -501,7 +503,7 @@ router.get('/', async (req, res) => {
 
     // Fallback para JSON se PostgreSQL indisponível ou sem dados
     const dbOk = await checkOrdersDb();
-    if (!dbOk || (result.data.length === 0 && result.total === 0)) {
+    if (!req.app.locals.store && (!dbOk || (result.data.length === 0 && result.total === 0))) {
       // Fallback: ler do JSON
       try {
         const { readFile: fsReadFile } = await import('node:fs/promises');
@@ -700,6 +702,7 @@ router.get('/:orderId', async (req, res) => {
  * Lê hubs do arquivo JSON (fallback enquanto hubs não estão no PostgreSQL).
  */
 async function readHubsFromJson(req) {
+  if (req?.app?.locals.store) return req.app.locals.readHubs();
   const { readFile } = await import('node:fs/promises');
   const hubsFile = (req && req.app && req.app.locals && req.app.locals.hubsFile)
     || process.env.HUBS_FILE
@@ -781,6 +784,7 @@ router.patch('/:orderId/hub', async (req, res) => {
     }});
   } catch (error) {
     console.error('Falha ao atualizar hub do pedido:', error.message);
+    if (error.code === 'STORAGE_CONFLICT') return res.status(409).json({ error: error.code, message: error.message });
     return res.status(500).json({ error: 'ORDER_STORAGE_ERROR', message: 'Não foi possível atualizar o hub.' });
   }
 });

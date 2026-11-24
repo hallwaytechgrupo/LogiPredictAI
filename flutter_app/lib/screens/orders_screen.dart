@@ -20,7 +20,8 @@ class OrdersScreen extends StatefulWidget {
   /// (por exemplo, após associação de hub no Simulador Logístico).
   final ValueNotifier<int>? refreshTrigger;
 
-  const OrdersScreen({super.key, this.refreshTrigger, this.ordersApi, this.hubsApi});
+  const OrdersScreen(
+      {super.key, this.refreshTrigger, this.ordersApi, this.hubsApi});
 
   final OrdersApi? ordersApi;
   final HubsApi? hubsApi;
@@ -29,7 +30,13 @@ class OrdersScreen extends StatefulWidget {
   State<OrdersScreen> createState() => _OrdersScreenState();
 }
 
-enum _OrderFilter { all, withHub, withoutHub, withPrediction, withoutPrediction }
+enum _OrderFilter {
+  all,
+  withHub,
+  withoutHub,
+  withPrediction,
+  withoutPrediction
+}
 
 extension _OrderFilterExtension on _OrderFilter {
   String get label {
@@ -161,7 +168,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
       final result = await _ordersApi.listOrders(
         page: targetPage,
         perPage: _perPage,
-        query: _searchController.text.trim().isEmpty ? null : _searchController.text.trim(),
+        query: _searchController.text.trim().isEmpty
+            ? null
+            : _searchController.text.trim(),
         source: 'operational',
       );
       if (!mounted || request != _ordersRequest) return;
@@ -189,13 +198,15 @@ class _OrdersScreenState extends State<OrdersScreen> {
       final hubs = await _hubsApi.list();
       if (mounted) {
         setState(() {
-          _hubs = hubs.map((h) => {
-            'id': h.id,
-            'code': h.code,
-            'name': h.name,
-            'city': h.city,
-            'state': h.state,
-          }).toList();
+          _hubs = hubs
+              .map((h) => {
+                    'id': h.id,
+                    'code': h.code,
+                    'name': h.name,
+                    'city': h.city,
+                    'state': h.state,
+                  })
+              .toList();
           _loadingHubs = false;
         });
       }
@@ -245,7 +256,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
       final file = result.files.single;
       final bytes = file.bytes;
       if (bytes == null || bytes.isEmpty) {
-        throw const FormatException('O arquivo CSV está vazio ou não pôde ser lido.');
+        throw const FormatException(
+            'O arquivo CSV está vazio ou não pôde ser lido.');
       }
       final csv = utf8.decode(bytes).replaceFirst('\uFEFF', '');
       if (csv.trim().isEmpty) {
@@ -257,7 +269,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
         _csvContent = csv;
         _csvFileName = file.name;
         _csvRecordCount = records.length - 1;
-        _status = 'Arquivo "$_csvFileName" carregado ($_csvRecordCount registros). Clique em "Importar" para processar.';
+        _status =
+            'Arquivo "$_csvFileName" carregado ($_csvRecordCount registros). Clique em "Importar" para processar.';
         _isLoading = false;
       });
     } catch (e) {
@@ -300,9 +313,12 @@ class _OrdersScreenState extends State<OrdersScreen> {
         _failed = response['failed'] as int?;
 
         final data = response['data'] as Map<String, dynamic>? ?? {};
-        _importedData = (data['imported'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-        _ignoredData = (data['ignored'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-        _failedData = (data['failed'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+        _importedData =
+            (data['imported'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+        _ignoredData =
+            (data['ignored'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+        _failedData =
+            (data['failed'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
         _status = 'Importação concluída!';
         _isLoading = false;
@@ -370,10 +386,13 @@ class _OrdersScreenState extends State<OrdersScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final surface = isDark ? const Color(0xFF172338) : Colors.white;
-    final surfaceAlt = isDark ? const Color(0xFF202F46) : const Color(0xFFF8FAFC);
+    final surfaceAlt =
+        isDark ? const Color(0xFF202F46) : const Color(0xFFF8FAFC);
     final border = isDark ? const Color(0xFF33445D) : const Color(0xFFE2E8F0);
-    final primaryText = isDark ? const Color(0xFFE2E8F0) : const Color(0xFF0F172A);
-    final secondaryText = isDark ? const Color(0xFFB5C2D4) : const Color(0xFF64748B);
+    final primaryText =
+        isDark ? const Color(0xFFE2E8F0) : const Color(0xFF0F172A);
+    final secondaryText =
+        isDark ? const Color(0xFFB5C2D4) : const Color(0xFF64748B);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -400,11 +419,13 @@ class _OrdersScreenState extends State<OrdersScreen> {
           const SizedBox(height: 20),
 
           // ===== B. CSV IMPORT SECTION =====
-          _buildImportSection(surface, surfaceAlt, border, primaryText, secondaryText),
+          _buildImportSection(
+              surface, surfaceAlt, border, primaryText, secondaryText),
           const SizedBox(height: 20),
 
           // ===== C. ORDERS LISTING =====
-          _buildOrdersListing(surface, surfaceAlt, border, primaryText, secondaryText),
+          _buildOrdersListing(
+              surface, surfaceAlt, border, primaryText, secondaryText),
         ],
       ),
     );
@@ -431,57 +452,54 @@ class _OrdersScreenState extends State<OrdersScreen> {
           if (_loadingSummary)
             const Center(child: CircularProgressIndicator(strokeWidth: 2))
           else if (_summaryError != null) ...[
-            Text('Erro ao carregar resumo: $_summaryError', style: const TextStyle(color: Colors.red)),
-            TextButton(onPressed: _loadSummary, child: const Text('Tentar carregar resumo novamente')),
-          ]
-          else ...[
-            Row(
-              children: [
-                Expanded(
-                  child: _summaryCard(
-                      'Total',
-                      _summary?['total']?.toString() ?? '0',
-                      Icons.receipt_long_outlined,
-                      const Color(0xFF2563EB),
-                      secondaryText),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _summaryCard(
-                      'Com hub',
-                      _summary?['withHub']?.toString() ?? '0',
-                      Icons.check_circle_outline,
-                      const Color(0xFF059669),
-                      secondaryText),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _summaryCard(
-                      'Sem hub',
-                      _summary?['withoutHub']?.toString() ?? '0',
-                      Icons.warning_amber_outlined,
-                      const Color(0xFFD97706),
-                      secondaryText),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _summaryCard(
-                      'Com previsão',
-                      _summary?['withPrediction']?.toString() ?? '0',
-                      Icons.analytics_outlined,
-                      const Color(0xFF7C3AED),
-                      secondaryText),
-                ),
-              ],
-            ),
+            Text('Erro ao carregar resumo: $_summaryError',
+                style: const TextStyle(color: Colors.red)),
+            TextButton(
+                onPressed: _loadSummary,
+                child: const Text('Tentar carregar resumo novamente')),
+          ] else ...[
+            LayoutBuilder(builder: (context, constraints) {
+              final cards = [
+                _summaryCard(
+                    'Total',
+                    _summary?['total']?.toString() ?? '0',
+                    Icons.receipt_long_outlined,
+                    const Color(0xFF2563EB),
+                    secondaryText),
+                _summaryCard(
+                    'Com hub',
+                    _summary?['withHub']?.toString() ?? '0',
+                    Icons.check_circle_outline,
+                    const Color(0xFF059669),
+                    secondaryText),
+                _summaryCard(
+                    'Sem hub',
+                    _summary?['withoutHub']?.toString() ?? '0',
+                    Icons.warning_amber_outlined,
+                    const Color(0xFFD97706),
+                    secondaryText),
+                _summaryCard(
+                    'Com previsão',
+                    _summary?['withPrediction']?.toString() ?? '0',
+                    Icons.analytics_outlined,
+                    const Color(0xFF7C3AED),
+                    secondaryText),
+              ];
+              final columns = constraints.maxWidth < 600 ? 2 : 4;
+              final width =
+                  (constraints.maxWidth - 12 * (columns - 1)) / columns;
+              return Wrap(spacing: 12, runSpacing: 12, children: [
+                for (final card in cards) SizedBox(width: width, child: card),
+              ]);
+            }),
           ],
         ],
       ),
     );
   }
 
-  Widget _summaryCard(
-      String label, String value, IconData icon, Color color, Color secondaryText) {
+  Widget _summaryCard(String label, String value, IconData icon, Color color,
+      Color secondaryText) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -494,23 +512,22 @@ class _OrdersScreenState extends State<OrdersScreen> {
             children: [
               Icon(icon, size: 16, color: color),
               const SizedBox(width: 4),
-              Text(label,
-                  style: TextStyle(fontSize: 11, color: secondaryText)),
+              Expanded(
+                  child: Text(label,
+                      style: TextStyle(fontSize: 11, color: secondaryText))),
             ],
           ),
           const SizedBox(height: 4),
           Text(value,
               style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: color)),
+                  fontSize: 22, fontWeight: FontWeight.bold, color: color)),
         ],
       ),
     );
   }
 
-  Widget _buildImportSection(
-      Color surface, Color surfaceAlt, Color border, Color primaryText, Color secondaryText) {
+  Widget _buildImportSection(Color surface, Color surfaceAlt, Color border,
+      Color primaryText, Color secondaryText) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -533,31 +550,44 @@ class _OrdersScreenState extends State<OrdersScreen> {
           const SizedBox(height: 12),
 
           // Buttons
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _isLoading ? null : _pickFile,
-                  icon: const Icon(Icons.upload_file, size: 18),
-                  label: Text(_csvFileName != null
-                      ? _csvFileName!
-                      : 'Selecionar CSV'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: primaryText,
-                    side: BorderSide(color: border),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: (_isLoading || _csvContent == null) ? null : _import,
-                  icon: const Icon(Icons.cloud_upload, size: 18),
-                  label: const Text('Importar'),
-                ),
-              ),
-            ],
-          ),
+          LayoutBuilder(
+              builder: (context, constraints) => Wrap(
+                    spacing: 12,
+                    runSpacing: 8,
+                    children: [
+                      SizedBox(
+                        width: constraints.maxWidth < 500
+                            ? constraints.maxWidth
+                            : (constraints.maxWidth - 12) / 2,
+                        child: OutlinedButton.icon(
+                          onPressed: _isLoading ? null : _pickFile,
+                          icon: const Icon(Icons.upload_file, size: 18),
+                          label: Text(
+                              _csvFileName != null
+                                  ? _csvFileName!
+                                  : 'Selecionar CSV',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: primaryText,
+                            side: BorderSide(color: border),
+                          ),
+                        ),
+                      ),
+                      SizedBox(
+                        width: constraints.maxWidth < 500
+                            ? constraints.maxWidth
+                            : (constraints.maxWidth - 12) / 2,
+                        child: ElevatedButton.icon(
+                          onPressed: (_isLoading || _csvContent == null)
+                              ? null
+                              : _import,
+                          icon: const Icon(Icons.cloud_upload, size: 18),
+                          label: const Text('Importar'),
+                        ),
+                      ),
+                    ],
+                  )),
 
           const SizedBox(height: 12),
 
@@ -573,7 +603,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
               child: Row(
                 children: [
                   if (_isLoading)
-                    const SizedBox(width: 16, height: 16,
+                    const SizedBox(
+                        width: 16,
+                        height: 16,
                         child: CircularProgressIndicator(strokeWidth: 2)),
                   const SizedBox(width: 8),
                   Expanded(
@@ -602,33 +634,29 @@ class _OrdersScreenState extends State<OrdersScreen> {
             Row(
               children: [
                 Expanded(
-                  child: _resultBadge(
-                      'Importados', _imported ?? 0, Colors.green),
+                  child:
+                      _resultBadge('Importados', _imported ?? 0, Colors.green),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: _resultBadge(
-                      'Ignorados', _ignored ?? 0, Colors.orange),
+                  child:
+                      _resultBadge('Ignorados', _ignored ?? 0, Colors.orange),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: _resultBadge(
-                      'Com falha', _failed ?? 0, Colors.red),
+                  child: _resultBadge('Com falha', _failed ?? 0, Colors.red),
                 ),
               ],
             ),
             // Expandable details
             if (_importedData.isNotEmpty)
-              _expandableSection(
-                  'Pedidos Importados (${_importedData.length})',
+              _expandableSection('Pedidos Importados (${_importedData.length})',
                   _importedData, Colors.green),
             if (_ignoredData.isNotEmpty)
-              _expandableSection(
-                  'Pedidos Ignorados (${_ignoredData.length})',
+              _expandableSection('Pedidos Ignorados (${_ignoredData.length})',
                   _ignoredData, Colors.orange),
             if (_failedData.isNotEmpty)
-              _expandableSection(
-                  'Pedidos com Falha (${_failedData.length})',
+              _expandableSection('Pedidos com Falha (${_failedData.length})',
                   _failedData, Colors.red),
           ],
 
@@ -672,19 +700,18 @@ class _OrdersScreenState extends State<OrdersScreen> {
         borderRadius: BorderRadius.circular(6),
         border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text('$value',
-              style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: color)),
-          const SizedBox(width: 4),
-          Text(label,
-              style: TextStyle(fontSize: 11, color: color)),
-        ],
-      ),
+      child: LayoutBuilder(builder: (context, constraints) {
+        final count = Text('$value',
+            style: TextStyle(
+                fontSize: 14, fontWeight: FontWeight.bold, color: color));
+        final caption =
+            Text(label, style: TextStyle(fontSize: 11, color: color));
+        return constraints.maxWidth < 120
+            ? Column(mainAxisSize: MainAxisSize.min, children: [count, caption])
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [count, const SizedBox(width: 4), caption]);
+      }),
     );
   }
 
@@ -692,7 +719,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
       String title, List<Map<String, dynamic>> items, Color color) {
     return _Accordion(
       header: Text(title,
-          style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12)),
+          style: TextStyle(
+              color: color, fontWeight: FontWeight.bold, fontSize: 12)),
       content: ListView.builder(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
@@ -703,9 +731,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
             dense: true,
             title: Text(item['order_id']?.toString() ?? '',
                 style: const TextStyle(fontSize: 12)),
-            subtitle: Text(item['reason']?.toString() ??
-                item['hub_id']?.toString() ??
-                ''),
+            subtitle: Text(
+                item['reason']?.toString() ?? item['hub_id']?.toString() ?? ''),
             leading: Icon(Icons.info, color: color, size: 16),
           );
         },
@@ -713,8 +740,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
     );
   }
 
-  Widget _buildOrdersListing(
-      Color surface, Color surfaceAlt, Color border, Color primaryText, Color secondaryText) {
+  Widget _buildOrdersListing(Color surface, Color surfaceAlt, Color border,
+      Color primaryText, Color secondaryText) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -726,14 +753,15 @@ class _OrdersScreenState extends State<OrdersScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header with count
-          Row(
+          Wrap(
+            spacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Text('Pedidos Operacionais',
                   style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                       color: primaryText)),
-              const SizedBox(width: 8),
               Text('$_total pedido${_total != 1 ? 's' : ''}',
                   style: TextStyle(fontSize: 12, color: secondaryText)),
             ],
@@ -757,8 +785,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                         borderSide: BorderSide(color: border)),
                     focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide:
-                            const BorderSide(color: Color(0xFF2563EB))),
+                        borderSide: const BorderSide(color: Color(0xFF2563EB))),
                     contentPadding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                     isDense: true,
@@ -790,34 +817,35 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   ? _buildErrorState(primaryText, secondaryText)
                   : _orders.isEmpty
                       ? _buildEmptyState(secondaryText)
-                      : _buildTable(surfaceAlt, border, primaryText, secondaryText),
+                      : _buildTable(
+                          surfaceAlt, border, primaryText, secondaryText),
 
           // Pagination
           if (!_loadingOrders && _ordersError == null && _totalPages > 1)
             Padding(
               padding: const EdgeInsets.only(top: 12),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              child: Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 8,
                 children: [
                   TextButton.icon(
-                    onPressed: _page > 1
-                        ? () => _loadOrders(page: _page - 1)
-                        : null,
+                    onPressed:
+                        _page > 1 ? () => _loadOrders(page: _page - 1) : null,
                     icon: const Icon(Icons.chevron_left, size: 16),
-                    label: const Text('Anterior',
-                        style: TextStyle(fontSize: 12)),
+                    label:
+                        const Text('Anterior', style: TextStyle(fontSize: 12)),
                   ),
-                  const SizedBox(width: 8),
                   Text('Página $_page de $_totalPages',
                       style: TextStyle(fontSize: 12, color: secondaryText)),
-                  const SizedBox(width: 8),
                   TextButton.icon(
                     onPressed: _page < _totalPages
                         ? () => _loadOrders(page: _page + 1)
                         : null,
                     icon: const Icon(Icons.chevron_right, size: 16),
-                    label: const Text('Próxima',
-                        style: TextStyle(fontSize: 12)),
+                    label:
+                        const Text('Próxima', style: TextStyle(fontSize: 12)),
                   ),
                 ],
               ),
@@ -832,8 +860,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.error_outline, size: 40,
-              color: Color(0xFFEF4444)),
+          const Icon(Icons.error_outline, size: 40, color: Color(0xFFEF4444)),
           const SizedBox(height: 8),
           Text('Erro ao carregar pedidos',
               style: TextStyle(
@@ -847,8 +874,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
           const SizedBox(height: 12),
           FilledButton(
             onPressed: _loadOrders,
-            child: const Text('Tentar novamente',
-                style: TextStyle(fontSize: 12)),
+            child:
+                const Text('Tentar novamente', style: TextStyle(fontSize: 12)),
           ),
         ],
       ),
@@ -860,8 +887,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.inbox_outlined, size: 48,
-              color: Color(0xFF94A3B8)),
+          const Icon(Icons.inbox_outlined, size: 48, color: Color(0xFF94A3B8)),
           const SizedBox(height: 8),
           Text('Nenhum pedido operacional',
               style: TextStyle(
@@ -869,8 +895,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   fontWeight: FontWeight.w600,
                   color: secondaryText)),
           const SizedBox(height: 4),
-          const Text(
-              'Importe pedidos via CSV para começar.',
+          const Text('Importe pedidos via CSV para começar.',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
         ],
@@ -901,8 +926,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
             DataCell(
               Text(
                 order['order_id']?.toString() ?? '',
-                style: const TextStyle(
-                    fontWeight: FontWeight.w600, fontSize: 11),
+                style:
+                    const TextStyle(fontWeight: FontWeight.w600, fontSize: 11),
               ),
             ),
             DataCell(Text(
@@ -935,14 +960,14 @@ class _OrdersScreenState extends State<OrdersScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 IconButton(
-                  icon: const Icon(Icons.visibility, size: 16,
-                      color: Color(0xFF2563EB)),
+                  icon: const Icon(Icons.visibility,
+                      size: 16, color: Color(0xFF2563EB)),
                   tooltip: 'Ver detalhes',
                   onPressed: () => _showOrderDetails(order),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.swap_horiz, size: 16,
-                      color: Color(0xFF7C3AED)),
+                  icon: const Icon(Icons.swap_horiz,
+                      size: 16, color: Color(0xFF7C3AED)),
                   tooltip: 'Alterar hub',
                   onPressed: () => _showChangeHubDialog(order),
                 ),
@@ -956,16 +981,17 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   void _showOrderDetails(Map<String, dynamic> order) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final primaryText = isDark ? const Color(0xFFE2E8F0) : const Color(0xFF0F172A);
-    final secondaryText = isDark ? const Color(0xFFB5C2D4) : const Color(0xFF64748B);
+    final primaryText =
+        isDark ? const Color(0xFFE2E8F0) : const Color(0xFF0F172A);
+    final secondaryText =
+        isDark ? const Color(0xFFB5C2D4) : const Color(0xFF64748B);
 
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
         title: Row(
           children: [
-            const Icon(Icons.receipt_long, size: 20,
-                color: Color(0xFF2563EB)),
+            const Icon(Icons.receipt_long, size: 20, color: Color(0xFF2563EB)),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
@@ -982,17 +1008,22 @@ class _OrdersScreenState extends State<OrdersScreen> {
             children: [
               _detailRow('CEP de origem',
                   order['origin_zip_code']?.toString() ?? '—', primaryText),
-              _detailRow('CEP de destino',
-                  order['destination_zip_code']?.toString() ?? '—', primaryText),
-              _detailRow('Entrega prometida',
-                  _formatDate(order['estimated_delivery_at']?.toString()) ?? '—', primaryText),
-              _detailRow('Status', _statusLabel(order['status']?.toString()), primaryText),
+              _detailRow(
+                  'CEP de destino',
+                  order['destination_zip_code']?.toString() ?? '—',
+                  primaryText),
+              _detailRow(
+                  'Entrega prometida',
+                  _formatDate(order['estimated_delivery_at']?.toString()) ??
+                      '—',
+                  primaryText),
+              _detailRow('Status', _statusLabel(order['status']?.toString()),
+                  primaryText),
               _detailRow('UF do vendedor',
                   order['seller_state']?.toString() ?? '—', primaryText),
               _detailRow('UF do cliente',
                   order['customer_state']?.toString() ?? '—', primaryText),
-              _detailRow('Hub associado',
-                  _formatHub(order['hub']) ?? '—',
+              _detailRow('Hub associado', _formatHub(order['hub']) ?? '—',
                   order['hub'] != null ? primaryText : Colors.orange),
               _detailRow('Origem dos dados',
                   order['source']?.toString() ?? 'operational', primaryText),
@@ -1001,20 +1032,26 @@ class _OrdersScreenState extends State<OrdersScreen> {
               _detailRow('Atualizado em',
                   _formatDate(order['updated_at']) ?? '—', secondaryText),
               const SizedBox(height: 8),
-              _detailRow('Preço',
+              _detailRow(
+                  'Preço',
                   order['price'] != null
                       ? 'R\$ ${order['price'].toStringAsFixed(2)}'
                       : '—',
                   primaryText),
-              _detailRow('Frete',
+              _detailRow(
+                  'Frete',
                   order['freight_value'] != null
                       ? 'R\$ ${order['freight_value'].toStringAsFixed(2)}'
                       : '—',
                   primaryText),
-              _detailRow('Itens',
-                  order['items_count']?.toString() ?? '—', primaryText),
-              _detailRow('Peso total (kg)',
-                  order['total_weight_g'] == null ? '—' : ((order['total_weight_g'] as num) / 1000).toString(), primaryText),
+              _detailRow('Itens', order['items_count']?.toString() ?? '—',
+                  primaryText),
+              _detailRow(
+                  'Peso total (kg)',
+                  order['total_weight_g'] == null
+                      ? '—'
+                      : ((order['total_weight_g'] as num) / 1000).toString(),
+                  primaryText),
               _detailRow('Volume total (cm³)',
                   order['total_volume_cm3']?.toString() ?? '—', primaryText),
             ],
@@ -1045,8 +1082,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     color: Color(0xFF64748B))),
           ),
           Expanded(
-            child: Text(value,
-                style: TextStyle(fontSize: 12, color: valueColor)),
+            child:
+                Text(value, style: TextStyle(fontSize: 12, color: valueColor)),
           ),
         ],
       ),
@@ -1055,7 +1092,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   void _showChangeHubDialog(Map<String, dynamic> order) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final primaryText = isDark ? const Color(0xFFE2E8F0) : const Color(0xFF0F172A);
+    final primaryText =
+        isDark ? const Color(0xFFE2E8F0) : const Color(0xFF0F172A);
 
     String? selectedHubId = order['hub_id'];
 

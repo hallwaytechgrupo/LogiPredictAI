@@ -5,9 +5,11 @@
  * os hubs mais próximos e calculando a rota via OpenRouteService.
  */
 import express from 'express';
+import { requestRoadRoute as getRouteViaOpenRouteService } from '../road-routing.js';
 import { normalizeCep, haversineKm } from '../utils.js';
 import { getGeolocationIndex } from '../geolocation.js';
 import { listActive as listActiveHubs } from '../db/repositories/hubs.js';
+import { cloudStore } from '../db/cloud-context.js';
 
 const router = express.Router();
 
@@ -37,77 +39,10 @@ async function readHubsFromJson() {
  */
 async function getActiveHubs() {
   let hubs = await listActiveHubs();
-  if (hubs.length === 0) {
+  if (hubs.length === 0 && !cloudStore()) {
     hubs = await readHubsFromJson();
   }
   return hubs;
-}
-
-/**
- * Calcula rota via OpenRouteService com waypoints obrigatórios.
- * Usa formato GeoJSON para obter coordenadas explícitas (LineString).
- * @param {Array<{latitude: number, longitude: number}>} waypoints - Sequência de pontos: origem, hub origem, hub destino, destino
- */
-async function getRouteViaOpenRouteService(waypoints) {
-  const key = process.env.OPENROUTE_API_KEY;
-  if (!key) {
-    return { error: 'OPENROUTE_KEY_MISSING', message: 'Chave API OpenRouteService não configurada.' };
-  }
-
-  // Use /geojson format to get explicit LineString coordinates instead of encoded polyline
-  const url = `https://api.openrouteservice.org/v2/directions/driving-car/geojson?api_key=${key}`;
-  const body = JSON.stringify({
-    coordinates: waypoints.map(wp => [wp.longitude, wp.latitude]),
-  });
-
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body,
-      signal: AbortSignal.timeout(10000),
-    });
-
-    if (!response.ok) {
-      return { error: 'OPENROUTE_ERROR', message: `OpenRouteService retornou status ${response.status}.` };
-    }
-
-    const data = await response.json();
-    // GeoJSON format returns { type: "FeatureCollection", features: [{ type: "Feature", geometry: { type: "LineString", coordinates: [...] }, properties: { segments: [...], summary: {...} } }] }
-    const features = data.features;
-    if (!features || features.length === 0) {
-      return { error: 'OPENROUTE_NO_ROUTE', message: 'Nenhuma rota encontrada.' };
-    }
-
-    const feature = features[0];
-    const properties = feature.properties || {};
-    const segments = properties.segments || [];
-    if (segments.length === 0) {
-      return { error: 'OPENROUTE_NO_ROUTE', message: 'Nenhuma rota encontrada.' };
-    }
-
-    // Sum all segments for multi-waypoint routes
-    let totalDistance = 0;
-    let totalDuration = 0;
-    for (const seg of segments) {
-      totalDistance += seg.distance || 0;
-      totalDuration += seg.duration || 0;
-    }
-    if (totalDistance === 0) {
-      return { error: 'OPENROUTE_NO_ROUTE', message: 'Nenhuma rota encontrada.' };
-    }
-
-    // Extract GeoJSON LineString geometry with explicit coordinates
-    const geometry = feature.geometry || null;
-
-    return {
-      distance_km: Math.round(totalDistance / 1000 * 100) / 100,
-      duration_seconds: Math.round(totalDuration),
-      geometry,
-    };
-  } catch (e) {
-    return { error: 'OPENROUTE_UNAVAILABLE', message: `Serviço de roteamento indisponível: ${e.message}` };
-  }
 }
 
 /**

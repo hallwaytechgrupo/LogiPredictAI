@@ -7,9 +7,14 @@ library;
 
 import 'package:flutter/material.dart';
 import 'screens/dashboard_screen.dart';
+import 'services/api_configuration.dart';
 
 /// Inicia a aplicação Flutter.
-void main() => runApp(const LogiPredictApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await ApiConfiguration.initialize();
+  runApp(const LogiPredictApp());
+}
 
 const navy = Color(0xFF0F172A);
 const blue = Color(0xFF2563EB);
@@ -24,6 +29,7 @@ class LogiPredictApp extends StatefulWidget {
 
 class _LogiPredictAppState extends State<LogiPredictApp> {
   ThemeMode _themeMode = ThemeMode.light;
+  int _connectionRevision = 0;
 
   void _toggleTheme() {
     setState(() {
@@ -90,8 +96,10 @@ class _LogiPredictAppState extends State<LogiPredictApp> {
         ),
       ),
       home: DashboardScreen(
+        key: ValueKey('${ApiConfiguration.baseUrl}:$_connectionRevision'),
         isDarkMode: _themeMode == ThemeMode.dark,
         onThemeToggle: _toggleTheme,
+        onConnectionChanged: () => setState(() => _connectionRevision++),
       ),
     );
   }

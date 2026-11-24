@@ -25,6 +25,47 @@ class MapScenariosApi {
   Future<Map<String, dynamic>> forecast(Map<String, dynamic> shipment) =>
       _request('forecast', body: shipment);
 
+  Future<Map<String, dynamic>> roadRoute(
+      Map<String, dynamic> origin, Map<String, dynamic> destination) async {
+    final response = await _request('route', body: {
+      'origin': {
+        'latitude': origin['latitude'],
+        'longitude': origin['longitude']
+      },
+      'destination': {
+        'latitude': destination['latitude'],
+        'longitude': destination['longitude']
+      },
+    });
+    final data = response['data'];
+    final geometry = data is Map ? data['geometry'] : null;
+    final coordinates = geometry is Map ? geometry['coordinates'] : null;
+    bool coordinate(dynamic p) =>
+        p is List &&
+        p.length >= 2 &&
+        p[0] is num &&
+        (p[0] as num).isFinite &&
+        (p[0] as num).abs() <= 180 &&
+        p[1] is num &&
+        (p[1] as num).isFinite &&
+        (p[1] as num).abs() <= 90;
+    if (data is! Map<String, dynamic> ||
+        geometry is! Map ||
+        geometry['type'] != 'LineString' ||
+        coordinates is! List ||
+        coordinates.length < 2 ||
+        !coordinates.every(coordinate) ||
+        data['distance_km'] is! num ||
+        !(data['distance_km'] as num).isFinite ||
+        (data['distance_km'] as num) < 0 ||
+        data['duration_seconds'] is! num ||
+        !(data['duration_seconds'] as num).isFinite ||
+        (data['duration_seconds'] as num) < 0) {
+      throw Exception('O serviço retornou um trajeto rodoviário inválido.');
+    }
+    return data;
+  }
+
   Future<Map<String, dynamic>> _request(String resource,
       {Map<String, String> query = const {},
       Map<String, dynamic>? body}) async {

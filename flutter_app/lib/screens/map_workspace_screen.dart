@@ -24,24 +24,31 @@ class _MapWorkspaceScreenState extends State<MapWorkspaceScreen> {
   Widget build(BuildContext context) => Column(children: [
         Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            child: Align(
-                alignment: Alignment.centerLeft,
-                child: SegmentedButton<int>(
-                  segments: const [
-                    ButtonSegment(
-                        value: 0,
-                        label: Text('Simular nova entrega'),
-                        icon: Icon(Icons.route_outlined)),
-                    ButtonSegment(
-                        value: 1,
-                        label: Text('Histórico por região'),
-                        icon: Icon(Icons.public))
-                  ],
-                  selected: {_view},
-                  onSelectionChanged: (values) =>
-                      setState(() => _view = values.single),
-                  showSelectedIcon: false,
-                ))),
+            child: LayoutBuilder(
+                builder: (context, constraints) => Align(
+                    alignment: Alignment.centerLeft,
+                    child: SegmentedButton<int>(
+                      segments: [
+                        ButtonSegment(
+                            value: 0,
+                            label: Text(constraints.maxWidth < 500
+                                ? 'Simular'
+                                : 'Simular nova entrega'),
+                            tooltip: 'Simular nova entrega',
+                            icon: const Icon(Icons.route_outlined)),
+                        ButtonSegment(
+                            value: 1,
+                            label: Text(constraints.maxWidth < 500
+                                ? 'Histórico'
+                                : 'Histórico por região'),
+                            tooltip: 'Histórico por região',
+                            icon: const Icon(Icons.public))
+                      ],
+                      selected: {_view},
+                      onSelectionChanged: (values) =>
+                          setState(() => _view = values.single),
+                      showSelectedIcon: false,
+                    )))),
         const Divider(height: 1),
         Expanded(
             child: IndexedStack(index: _view, children: [

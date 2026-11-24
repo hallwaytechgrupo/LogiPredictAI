@@ -12,6 +12,7 @@ Base local: `http://127.0.0.1:3001`. Serviço Python interno: `http://127.0.0.1:
 | GET | `/api/v1/analytics/states` | Pedidos e atrasos observados por UF |
 | GET | `/api/v1/map/locations?q=...` | Pesquisa de CEP/cidade no catálogo real |
 | POST | `/api/v1/map/forecast` | Risco de uma entrega planejada, sem pedido importado |
+| POST | `/api/v1/map/route` | Trajeto pelas estradas entre origem e destino, em GeoJSON |
 | GET | `/api/v1/orders` | Lista paginada de pedidos importados |
 | POST | `/api/v1/orders/import` | Importa pedidos em lote |
 | GET | `/api/v1/orders/:orderId` | Consulta um pedido por ID |
@@ -195,3 +196,18 @@ O formulário de entrega futura usa `GET /api/v1/map/locations?q=...` e
 `POST /api/v1/map/forecast`, sem `order_id` e sem depender de um pedido importado.
 Não altera os contratos antigos de previsão nem persiste cenários como pedidos.
 [Campos, erros, critérios de risco e exemplos](mapa-e-demonstracao.md#api).
+## Roteamento rodoviário do planejamento
+
+`POST /api/v1/map/route` recebe `origin` e `destination`, cada um com
+`latitude` e `longitude` numéricas. Retorna `data.geometry` em GeoJSON
+`LineString`, `data.distance_km`, `data.duration_seconds`,
+`data.source: "openrouteservice"` e `data.profile: "driving-car"`.
+
+A consulta usa `OPENROUTE_API_KEY` somente no backend. Coordenadas inválidas
+recebem 422; ausência de configuração/indisponibilidade recebe 503; rota não
+encontrada recebe 404; falha do provedor recebe 502 e timeout recebe 504.
+O cliente mantém o cálculo de risco disponível se o trajeto falhar.
+
+A distância rodoviária não substitui `shipment.distance_km` da previsão,
+que continua sendo a distância geográfica usada no treinamento.
+Veja [rotas rodoviárias](rotas-rodoviarias.md) para exemplos e limites.

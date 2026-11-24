@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -20,6 +21,19 @@ const destination = {
   'state': 'RJ',
   'latitude': -22.90,
   'longitude': -43.17
+};
+const road = {
+  'distance_km': 435.8,
+  'duration_seconds': 19800,
+  'source': 'openrouteservice',
+  'geometry': {
+    'type': 'LineString',
+    'coordinates': [
+      [-46.63, -23.55],
+      [-45.9, -23.1],
+      [-43.17, -22.90]
+    ],
+  },
 };
 http.Response jsonResponse(Object body, [int code = 200]) =>
     http.Response(jsonEncode(body), code,
@@ -70,17 +84,31 @@ Future<void> mount(WidgetTester tester, MapScenariosApi api) async {
                     ? const Text('Histórico exibido')
                     : const SizedBox.shrink()))));
     await tester.pumpAndSettle();
-  }, () => MockClient((request) async {
-        if (request.url.host == 'tile.openstreetmap.org') {
-          return http.Response.bytes(
-            base64Decode(
-                'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='),
-            200,
-            headers: {'content-type': 'image/png'},
-          );
-        }
-        return http.Response('', 404);
-      }));
+  },
+      () => MockClient((request) async {
+            if (request.url.host == 'tile.openstreetmap.org') {
+              return http.Response.bytes(
+                base64Decode(
+                    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='),
+                200,
+                headers: {'content-type': 'image/png'},
+              );
+            }
+            return http.Response('', 404);
+          }));
+}
+
+void mapTestWidgets(
+    String description, Future<void> Function(WidgetTester) body) {
+  testWidgets(
+      description,
+      (tester) => http.runWithClient(
+          () => body(tester),
+          () => MockClient((request) async => http.Response.bytes(
+              base64Decode(
+                  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='),
+              200,
+              headers: {'content-type': 'image/png'}))));
 }
 
 void main() {
@@ -101,7 +129,8 @@ void main() {
     api.close();
   });
 
-  testWidgets('future form needs no imported order and survives switching maps',
+  mapTestWidgets(
+      'future form needs no imported order and survives switching maps',
       (tester) async {
     final calls = <http.Request>[];
     Map<String, dynamic>? sent;
@@ -118,6 +147,7 @@ void main() {
         sent = jsonDecode(req.body) as Map<String, dynamic>;
         return jsonResponse(forecastResult(sent!));
       }
+      if (req.url.path.endsWith('/route')) return jsonResponse({'data': road});
       throw StateError('The future form must not request historical orders.');
     }));
     await mount(tester, api);
@@ -135,6 +165,12 @@ void main() {
     expect(sent!.containsKey('seller_id'), isFalse);
     expect(sent!['purchase_at'].toString().contains('-12-23T09:00'), isTrue);
     expect(find.text('Risco alto'), findsOneWidget);
+    expect(find.textContaining('435,8 km por estrada'), findsOneWidget);
+    final config = tester.widget<LeafletMap>(find.byType(LeafletMap)).config;
+    expect(config['roadRoute'], road);
+    expect(calls.where((request) => request.url.path.endsWith('/route')),
+        hasLength(1));
+    expect(sent!.containsKey('distance_km'), isFalse);
     expect(find.textContaining('Natal (25/12)'), findsOneWidget);
     await tester.tap(find.text('Histórico por região'));
     await tester.pumpAndSettle();
@@ -144,12 +180,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Risco alto'), findsOneWidget);
     expect(find.byType(LeafletMap), findsOneWidget);
+    expect(calls.where((request) => request.url.path.endsWith('/route')),
+        hasLength(1));
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
     api.close();
   });
 
-  testWidgets(
+  mapTestWidgets(
       'form errors do not send invalid future dates and API failure can be retried',
       (tester) async {
     var attempts = 0;
@@ -161,6 +199,7 @@ void main() {
           ]
         });
       }
+      if (req.url.path.endsWith('/route')) return jsonResponse({'data': road});
       attempts++;
       return attempts == 1
           ? jsonResponse({'message': 'Serviço indisponível.'}, 503)
@@ -191,6 +230,100 @@ void main() {
     expect(find.text('Risco alto'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
+    api.close();
+  });
+
+  mapTestWidgets(
+      'a road failure does not prevent prediction and can be retried',
+      (tester) async {
+    var routes = 0;
+    final api = MapScenariosApi(client: MockClient((req) async {
+      if (req.url.path.endsWith('/locations')) {
+        return jsonResponse({
+          'data': [
+            req.url.queryParameters['q'] == '01001' ? origin : destination
+          ]
+        });
+      }
+      if (req.url.path.endsWith('/route')) {
+        routes++;
+        return routes == 1
+            ? jsonResponse(
+                {'message': 'Rotas temporariamente indisponíveis.'}, 503)
+            : jsonResponse({'data': road});
+      }
+      return jsonResponse(
+          forecastResult(jsonDecode(req.body) as Map<String, dynamic>));
+    }));
+    await mount(tester, api);
+    await tester.tap(find.byKey(const ValueKey('future-example')));
+    await tester.pumpAndSettle();
+    expect(find.text('Trajeto pelas estradas indisponível.'), findsOneWidget);
+    expect(
+        tester.widget<LeafletMap>(find.byType(LeafletMap)).config['roadRoute'],
+        isNull);
+    await tester.ensureVisible(find.byKey(const ValueKey('map-simulate')));
+    await tester.tap(find.byKey(const ValueKey('map-simulate')));
+    await tester.pumpAndSettle();
+    expect(find.text('Risco alto'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const ValueKey('retry-road-route')));
+    await tester.tap(find.byKey(const ValueKey('retry-road-route')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('435,8 km por estrada'), findsOneWidget);
+    expect(routes, 2);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    api.close();
+  });
+
+  mapTestWidgets('an old route response cannot replace a newer selection',
+      (tester) async {
+    final first = Completer<http.Response>();
+    var routes = 0;
+    final api = MapScenariosApi(client: MockClient((req) async {
+      if (req.url.path.endsWith('/locations')) {
+        return jsonResponse({
+          'data': [
+            req.url.queryParameters['q'] == '01001' ? origin : destination
+          ]
+        });
+      }
+      routes++;
+      if (routes == 1) return first.future;
+      return jsonResponse({'data': road});
+    }));
+    await mount(tester, api);
+    await tester.tap(find.byKey(const ValueKey('future-example')));
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.ensureVisible(find.byKey(const ValueKey('future-example')));
+    await tester.tap(find.byKey(const ValueKey('future-example')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('435,8 km por estrada'), findsOneWidget);
+    first.complete(jsonResponse({
+      'data': {...road, 'distance_km': 999}
+    }));
+    await tester.pumpAndSettle();
+    expect(
+        tester.widget<LeafletMap>(find.byType(LeafletMap)).config['roadRoute']
+            ?['distance_km'],
+        435.8);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    api.close();
+  });
+
+  test('the road API rejects a malformed geometry', () async {
+    final api = MapScenariosApi(
+        client: MockClient((req) async => jsonResponse({
+              'data': {
+                ...road,
+                'geometry': {
+                  'type': 'Point',
+                  'coordinates': [0, 0]
+                }
+              }
+            })));
+    await expectLater(api.roadRoute(origin, destination), throwsException);
     api.close();
   });
 }

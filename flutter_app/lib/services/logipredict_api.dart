@@ -12,6 +12,7 @@ library;
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'api_configuration.dart';
 
 /// Cliente HTTP para a API LogiPredictAI.
 ///
@@ -19,10 +20,7 @@ import 'package:http/http.dart' as http;
 /// ao backend Node.js, que por sua vez encaminha as previsões ao serviço ML.
 class LogiPredictApi {
   /// URL base do backend, configurável via dart-define.
-  static const String baseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'http://127.0.0.1:3001',
-  );
+  static String get baseUrl => ApiConfiguration.baseUrl;
 
   /// Constrói a URI do endpoint de previsão com order_id opcional.
   static Uri predictionUri({String? orderId}) =>

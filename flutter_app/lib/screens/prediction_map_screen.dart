@@ -27,6 +27,10 @@ class _PredictionMapScreenState extends State<PredictionMapScreen> {
   final _items = TextEditingController(text: '1');
   final _seller = TextEditingController();
   Map<String, dynamic>? _origin, _destination, _result;
+  Map<String, dynamic>? _roadRoute;
+  String? _routeError;
+  bool _routeBusy = false;
+  int _routeRequest = 0;
   String? _error;
   bool _busy = false, _exampleBusy = false, _modal = false;
   int _fit = 0, _reset = 0;
@@ -72,6 +76,52 @@ class _PredictionMapScreenState extends State<PredictionMapScreen> {
     if (_result != null) setState(() => _result = null);
   }
 
+  void _clearRoadRoute() {
+    _routeRequest++;
+    _roadRoute = null;
+    _routeError = null;
+    _routeBusy = false;
+  }
+
+  void _selectLocation(Map<String, dynamic>? place, {required bool origin}) {
+    setState(() {
+      if (origin) {
+        _origin = place;
+      } else {
+        _destination = place;
+      }
+      _result = null;
+      _clearRoadRoute();
+      _fit++;
+    });
+    unawaited(_loadRoadRoute());
+  }
+
+  Future<void> _loadRoadRoute() async {
+    if (_origin == null || _destination == null) return;
+    final request = ++_routeRequest;
+    setState(() {
+      _routeBusy = true;
+      _routeError = null;
+    });
+    try {
+      final route = await _api.roadRoute(_origin!, _destination!);
+      if (!mounted || request != _routeRequest) return;
+      setState(() {
+        _roadRoute = route;
+        _fit++;
+      });
+    } catch (_) {
+      if (mounted && request == _routeRequest) {
+        setState(() => _routeError = 'Trajeto pelas estradas indisponível.');
+      }
+    } finally {
+      if (mounted && request == _routeRequest) {
+        setState(() => _routeBusy = false);
+      }
+    }
+  }
+
   @override
   void dispose() {
     for (final c in [
@@ -96,6 +146,7 @@ class _PredictionMapScreenState extends State<PredictionMapScreen> {
       _exampleBusy = true;
       _error = null;
       _result = null;
+      _clearRoadRoute();
     });
     try {
       final places = await Future.wait([
@@ -126,6 +177,7 @@ class _PredictionMapScreenState extends State<PredictionMapScreen> {
         _items.text = '1';
         _seller.clear();
       });
+      unawaited(_loadRoadRoute());
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
@@ -206,8 +258,10 @@ class _PredictionMapScreenState extends State<PredictionMapScreen> {
       child: Row(children: [
         Icon(icon, size: 18, color: const Color(0xFF2563EB)),
         const SizedBox(width: 8),
-        Text(title,
-            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14))
+        Expanded(
+            child: Text(title,
+                style:
+                    const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)))
       ]));
   Widget _date(TextEditingController c, String label, Key key) => Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -242,7 +296,9 @@ class _PredictionMapScreenState extends State<PredictionMapScreen> {
             final n = double.tryParse((v ?? '').trim().replaceAll(',', '.'));
             if (n == null || !n.isFinite || n < 0) return 'Valor inválido.';
             if (integer &&
-                (int.tryParse((v ?? '').trim()) == null || n < 1 || n > 10000)) {
+                (int.tryParse((v ?? '').trim()) == null ||
+                    n < 1 ||
+                    n > 10000)) {
               return 'Informe de 1 a 10.000 itens.';
             }
             return null;
@@ -276,11 +332,7 @@ class _PredictionMapScreenState extends State<PredictionMapScreen> {
                 api: _api,
                 value: _origin,
                 enabled: !_disabled,
-                onSelected: (p) => setState(() {
-                      _origin = p;
-                      _result = null;
-                      _fit++;
-                    })),
+                onSelected: (p) => _selectLocation(p, origin: true)),
             const SizedBox(height: 12),
             _LocationPicker(
                 key: ValueKey('destination-$_reset'),
@@ -288,11 +340,7 @@ class _PredictionMapScreenState extends State<PredictionMapScreen> {
                 api: _api,
                 value: _destination,
                 enabled: !_disabled,
-                onSelected: (p) => setState(() {
-                      _destination = p;
-                      _result = null;
-                      _fit++;
-                    })),
+                onSelected: (p) => _selectLocation(p, origin: false)),
             _section('Quando?', Icons.event_outlined),
             _date(_purchase, 'Data/hora da compra',
                 const ValueKey('future-purchase')),
@@ -497,23 +545,75 @@ class _PredictionMapScreenState extends State<PredictionMapScreen> {
         ]));
   }
 
+  Widget _roadStatus() {
+    final route = _roadRoute;
+    final minutes =
+        route == null ? 0 : ((route['duration_seconds'] as num) / 60).ceil();
+    final time =
+        minutes < 60 ? '${minutes}min' : '${minutes ~/ 60}h ${minutes % 60}min';
+    return Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Row(children: [
+          if (_routeBusy) ...[
+            const SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(strokeWidth: 2)),
+            const SizedBox(width: 8),
+          ],
+          Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                Text(
+                    _routeBusy
+                        ? 'Buscando trajeto pelas estradas…'
+                        : _routeError ??
+                            (route == null
+                                ? 'Selecione os locais para consultar o trajeto.'
+                                : '${(route['distance_km'] as num).toStringAsFixed(1).replaceAll('.', ',')} km por estrada · $time de direção'),
+                    key: const ValueKey('road-route-status'),
+                    style: const TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w600)),
+                if (route != null && !_routeBusy)
+                  const Text(
+                      'OpenRouteService / OpenStreetMap · Condução sem paradas, não é prazo de entrega.',
+                      style: TextStyle(fontSize: 10, color: Color(0xFF64748B))),
+                if (_routeError != null)
+                  const Text(
+                      'Você pode continuar calculando o risco de atraso.',
+                      style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+              ])),
+          if (_routeError != null)
+            IconButton(
+                key: const ValueKey('retry-road-route'),
+                tooltip: 'Buscar rota novamente',
+                onPressed: () => unawaited(_loadRoadRoute()),
+                icon: const Icon(Icons.refresh)),
+        ]));
+  }
+
   Widget _mapArea() =>
       Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Container(
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
             color: Theme.of(context).colorScheme.surface,
-            child: Row(children: [
-              const Icon(Icons.route, size: 18, color: Color(0xFF2563EB)),
-              const SizedBox(width: 10),
-              Expanded(
-                  child: Text(
-                      _origin == null || _destination == null
-                          ? 'Selecione de onde sai e para onde vai a entrega'
-                          : '${_origin!['city']} / ${_origin!['state']}  →  ${_destination!['city']} / ${_destination!['state']}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 13))),
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                const Icon(Icons.route, size: 18, color: Color(0xFF2563EB)),
+                const SizedBox(width: 10),
+                Expanded(
+                    child: Text(
+                        _origin == null || _destination == null
+                            ? 'Selecione de onde sai e para onde vai a entrega'
+                            : '${_origin!['city']} / ${_origin!['state']}  →  ${_destination!['city']} / ${_destination!['state']}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 13))),
+              ]),
+              if (_origin != null && _destination != null) _roadStatus()
             ])),
         Expanded(
             child: widget.active
@@ -525,6 +625,7 @@ class _PredictionMapScreenState extends State<PredictionMapScreen> {
                         'origin': _result?['origin'] ?? _origin,
                         'destination': _result?['destination'] ?? _destination,
                         'risk': _result?['result']?['risk'],
+                        'roadRoute': _roadRoute,
                         'fitToken': _fit,
                       })
                 : const SizedBox.shrink()),
@@ -535,8 +636,8 @@ class _PredictionMapScreenState extends State<PredictionMapScreen> {
         final sidebar = ColoredBox(
             color: Theme.of(context).colorScheme.surface,
             child: Material(color: Colors.transparent, child: _sidebar()));
-        final resultPanel = Material(
-            color: Colors.transparent, child: _resultPanel());
+        final resultPanel =
+            Material(color: Colors.transparent, child: _resultPanel());
         if (c.maxWidth < 900) {
           return SingleChildScrollView(
               child: Column(children: [

@@ -1,5 +1,60 @@
 # Validação da entrega
 
+## Rotas pelas estradas — 24/11/2026
+
+- Node.js: 165 casos, 164 aprovados e um teste de PostgreSQL ignorado.
+  Incluem validação de coordenadas, autenticação no provedor, GeoJSON,
+  falhas, timeout, cache, consultas simultâneas e o contrato do despacho.
+- Flutter: 113 testes aprovados. Os casos do mapa verificam a geometria
+  rodoviária, erro/retry independente da previsão, descarte de respostas
+  antigas, troca de vistas, cor da linha e enquadramento da câmera.
+- Análise estática dos cinco módulos Dart e testes alterados sem problemas;
+  build Web de produção concluído.
+- Integração Web no Chrome com serviços e OpenRouteService reais aprovada:
+  rota em estradas, previsão com `modelo_564_filter`, histórico e retorno
+  ao formulário mantendo a análise.
+- A consulta direta São Paulo → Rio retornou 432,25 km, 18.145 segundos e
+  2.917 pontos. A consulta inicial levou cerca de 1,44 segundo; a repetição
+  em cache levou 0,008 segundo. São medições locais, não um teste de carga.
+- O despacho existente também retornou sua rota real pelos hubs selecionados.
+  O novo planejamento não modifica os pesos ou a distância geográfica do ML.
+- APK universal 1.0.1, código 2, compilado com a mesma assinatura da versão
+  anterior. Os nove arquivos do manifesto dos modelos mantiveram os hashes.
+  A nova versão não foi instalada fisicamente nesta etapa: o ADB não detectou
+  o aparelho. Os testes Flutter verificaram o desenho e a câmera do mapa nativo.
+
+As capturas da integração estão em `flutter_app/build/reports/roads-web`.
+Uma delas acompanha o [guia das rotas](rotas-rodoviarias.md).
+
+## Android e compatibilidade Web — 24/11/2026
+
+- Flutter: 110 testes aprovados. Os 10 casos adicionados verificam endereço
+  persistido, clientes HTTP, saúde do servidor, telas de 320/360 pixels,
+  orientação horizontal, altura reduzida, câmera e detalhes do mapa nativo.
+- Análise estática dos oito arquivos novos de conexão, mapa e testes:
+  sem problemas.
+- Build Web de produção concluído após a adaptação Android. O mapa Web
+  permanece em Leaflet e a configuração por `dart-define` foi preservada.
+- APK release 1.0.0 universal compilado para ARM de 32/64 bits e x86-64,
+  com Android mínimo API 24. Assinatura verificada, permissão de internet
+  presente e pacote sem a flag de depuração.
+- Release instalado e aberto no A36, com a porta 3001 encaminhada por USB.
+- Integração física no Samsung A36, Android 16: conexão USB com a API real,
+  previsão de compra futura com `modelo_564_filter`, rota, histórico regional
+  e navegação por pedidos, análises e hubs. O teste registra as telas em
+  `flutter_app/build/reports/android`. A integração automatizada usa profile;
+  depois dela, o APK final de release foi reinstalado.
+- Os nove arquivos de pesos, metadados e dados do manifesto de integridade
+  mantiveram seus hashes SHA-256. O backend e os modelos não foram alterados.
+
+A execução física usa Node.js com fallback JSON e o serviço Python local.
+Não representa teste por Wi-Fi, homologação de PostgreSQL ou validação de
+outros modelos de aparelho. O teste não importa nem edita pedidos operacionais
+e não automatiza o seletor de documentos do Android.
+
+O [guia Android](android-apk.md) descreve build, instalação, conexão com o
+servidor e assinatura do APK de demonstração.
+
 ## Leaflet e pedido futuro — 22/11/2026
 
 - Python: 56 testes aprovados, incluindo os pesos preservados, contrato de

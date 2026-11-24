@@ -1,8 +1,10 @@
 import getKnex from '../knex.js';
+import { cloudStore } from '../cloud-context.js';
 
 let dbAvailable = false;
 
 async function checkDb() {
+  if (cloudStore()) return true;
   if (dbAvailable) return true;
   try {
     const knex = getKnex();
@@ -16,6 +18,10 @@ async function checkDb() {
 }
 
 export async function create(prediction) {
+  if (cloudStore()) {
+    await cloudStore().appendPredictions([prediction]);
+    return prediction;
+  }
   const available = await checkDb();
   if (!available) return null;
 
@@ -30,6 +36,7 @@ export async function create(prediction) {
 }
 
 export async function findByOrderId(orderId) {
+  if (cloudStore()) return (await cloudStore().read('predictions')).filter((item) => item.order_id === orderId);
   const available = await checkDb();
   if (!available) return [];
 
@@ -45,6 +52,12 @@ export async function findByOrderId(orderId) {
 }
 
 export async function list(options = {}) {
+  if (cloudStore()) {
+    const { page = 1, perPage = 20, hubId, orderId } = options;
+    const predictions = (await cloudStore().read('predictions')).filter((item) =>
+      (!hubId || item.hub_id === hubId) && (!orderId || item.order_id === orderId));
+    return { data: predictions.slice((page - 1) * perPage, page * perPage), total: predictions.length, page, perPage };
+  }
   const available = await checkDb();
   if (!available) return { data: [], total: 0 };
 

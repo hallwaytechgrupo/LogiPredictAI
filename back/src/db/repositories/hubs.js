@@ -1,10 +1,12 @@
 import getKnex from '../knex.js';
 import fs from 'node:fs';
 import path from 'node:path';
+import { cloudStore } from '../cloud-context.js';
 
 let dbAvailable = null; // unknown until checked
 
 async function checkDb() {
+  if (cloudStore()) return true;
   if (dbAvailable === true) return true;
   if (dbAvailable === false) return false;
   try {
@@ -46,6 +48,9 @@ function haversineKm(lat1, lng1, lat2, lng2) {
 }
 
 export async function listActive() {
+  if (cloudStore()) return (await cloudStore().read('hubs')).filter((hub) =>
+    (hub.active === true || hub.status === 'active') &&
+    (hub.validationStatus ?? 'APROVADO') === 'APROVADO' && hub.latitude != null && hub.longitude != null);
   const available = await checkDb();
   if (available) {
     try {
@@ -70,6 +75,7 @@ export async function listActive() {
 }
 
 export async function findById(hubId) {
+  if (cloudStore()) return (await cloudStore().read('hubs')).find((hub) => hub.id === hubId) ?? null;
   const available = await checkDb();
   if (available) {
     try {

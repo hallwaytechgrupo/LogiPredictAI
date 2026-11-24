@@ -8,6 +8,7 @@ library;
 
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'api_configuration.dart';
 
 /// Representa um hub logístico no sistema.
 ///
@@ -142,18 +143,10 @@ class HubsApiException implements Exception {
 /// Suporta injeção de [http.Client] para testes.
 /// URL base configurável via dart-define: LOGIPREDICT_API_URL.
 class HubsApi {
-  static const String _apiBaseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'http://localhost:3001',
-  );
-
   HubsApi({http.Client? client, String? baseUrl})
       : _client = client ?? http.Client(),
         _baseUrl = (baseUrl ??
-                const String.fromEnvironment(
-                  'LOGIPREDICT_API_URL',
-                  defaultValue: _apiBaseUrl,
-                ))
+                ApiConfiguration.legacyBaseUrl(fallback: 'http://localhost:3001'))
             .replaceFirst(RegExp(r'/$'), '');
 
   final http.Client _client;

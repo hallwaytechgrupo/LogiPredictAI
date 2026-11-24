@@ -14,6 +14,7 @@ import 'package:latlong2/latlong.dart';
 import '../services/dispatch_simulation.dart';
 import '../services/dispatch_api.dart';
 import '../services/logipredict_api.dart';
+import '../services/api_configuration.dart';
 import '../services/simulator_controller.dart';
 import '../services/simulator_prediction_service.dart';
 import '../services/simulator_scenario.dart';
@@ -25,6 +26,7 @@ import '../services/orders_geography_api.dart';
 import '../services/orders_region_api.dart';
 import '../widgets/hub_risk_layer_unavailable.dart';
 import '../widgets/logistics_heat_map.dart';
+import '../widgets/server_connection_dialog.dart';
 import 'hubs_management_screen.dart';
 import 'orders_screen.dart';
 import 'map_workspace_screen.dart';
@@ -40,9 +42,13 @@ const muted = Color(0xFF64748B);
 class DashboardScreen extends StatefulWidget {
   final bool isDarkMode;
   final VoidCallback onThemeToggle;
+  final VoidCallback? onConnectionChanged;
 
   const DashboardScreen(
-      {super.key, required this.isDarkMode, required this.onThemeToggle});
+      {super.key,
+      required this.isDarkMode,
+      required this.onThemeToggle,
+      this.onConnectionChanged});
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -1087,11 +1093,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
           children: [
             const Icon(Icons.receipt_long, size: 18, color: blue),
             const SizedBox(width: 8),
-            const Text(
+            const Expanded(
+                child: Text(
               'Utilizar pedido importado',
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-            ),
-            const Spacer(),
+            )),
             Switch(
               value: _useImportedOrder,
               onChanged: _isAnalyzing || _loadingSelectedOrder
@@ -1329,6 +1335,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 650;
     final pages = [
       _buildSimulator(),
       _buildMapPage(),
@@ -1355,9 +1362,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('LogiPredict AI',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style:
                           TextStyle(fontWeight: FontWeight.bold, fontSize: 19)),
                   Text('Módulo B2B Prescritivo',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(fontSize: 11, color: Color(0xFFBFDBFE))),
                 ],
               ),
@@ -1365,6 +1376,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
         ),
         actions: [
+          if (ApiConfiguration.canConfigure)
+            IconButton(
+                tooltip: 'Configurar conexão',
+                icon: const Icon(Icons.settings_ethernet),
+                onPressed: () async {
+                  final changed = await showDialog<bool>(
+                      context: context,
+                      builder: (_) => const ServerConnectionDialog());
+                  if (changed == true && mounted) {
+                    widget.onConnectionChanged?.call();
+                  }
+                }),
+          if (compact)
+            IconButton(
+                key: const ValueKey('theme-toggle'),
+                tooltip: widget.isDarkMode
+                    ? 'Ativar modo claro'
+                    : 'Ativar modo escuro',
+                onPressed: widget.onThemeToggle,
+                icon: Icon(
+                    widget.isDarkMode ? Icons.light_mode : Icons.dark_mode)),
           if (MediaQuery.sizeOf(context).width > 650)
             const Padding(
               padding: EdgeInsets.only(right: 16),
@@ -1385,30 +1417,74 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
         ],
       ),
-      body: Column(
-        children: [
-          _buildNavigation(),
-          Expanded(
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1400),
-                child: IndexedStack(index: _tab, children: pages),
+      body: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              if (!compact) _buildNavigation(),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1400),
+                    child: IndexedStack(index: _tab, children: pages),
+                  ),
+                ),
               ),
+            ],
+          )),
+      bottomNavigationBar: compact
+          ? NavigationBar(
+              selectedIndex: _tab,
+              onDestinationSelected: _selectTab,
+              destinations: const [
+                  NavigationDestination(
+                      icon: Icon(Icons.calculate_outlined),
+                      label: 'Simular',
+                      tooltip: 'Simulador Logístico'),
+                  NavigationDestination(
+                      icon: Icon(Icons.map_outlined),
+                      label: 'Mapa',
+                      tooltip: 'Mapa de Calor Logístico'),
+                  NavigationDestination(
+                      icon: Icon(Icons.receipt_long_outlined),
+                      label: 'Pedidos'),
+                  NavigationDestination(
+                      icon: Icon(Icons.show_chart),
+                      label: 'Análises',
+                      tooltip: 'Analytics & KPIs'),
+                  NavigationDestination(
+                      icon: Icon(Icons.warehouse_outlined),
+                      label: 'Hubs',
+                      tooltip: 'Gestão de Hubs'),
+                ])
+          : null,
+      floatingActionButton: compact
+          ? null
+          : FloatingActionButton(
+              key: const ValueKey('theme-toggle'),
+              mini: true,
+              onPressed: widget.onThemeToggle,
+              tooltip: widget.isDarkMode
+                  ? 'Ativar modo claro'
+                  : 'Ativar modo escuro',
+              child: Icon(
+                  widget.isDarkMode ? Icons.light_mode : Icons.dark_mode,
+                  size: 17),
             ),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        key: const ValueKey('theme-toggle'),
-        mini: true,
-        onPressed: widget.onThemeToggle,
-        tooltip: widget.isDarkMode ? 'Ativar modo claro' : 'Ativar modo escuro',
-        child: Icon(widget.isDarkMode ? Icons.light_mode : Icons.dark_mode,
-            size: 17),
-      ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
+  }
+
+  void _selectTab(int index) {
+    final wasOnMap = _tab == 1;
+    final wasOnOrders = _tab == 2;
+    setState(() => _tab = index);
+    if (index == 1 && !wasOnMap && !_loadingMapHubs) {
+      _loadMapHubs();
+      if (_regionOrderData.isEmpty && !_loadingRegions) _loadRegions();
+    }
+    if (index == 2 && !wasOnOrders) _ordersRefreshTrigger.value++;
   }
 
   Widget _buildNavigation() {
@@ -1437,22 +1513,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           children: List.generate(labels.length, (i) {
             final selected = _tab == i;
             return InkWell(
-              onTap: () {
-                final wasOnMap = _tab == 1;
-                final wasOnOrders = _tab == 2;
-                setState(() {
-                  _tab = i;
-                });
-                if (i == 1 && !wasOnMap && !_loadingMapHubs) {
-                  _loadMapHubs();
-                  if (_regionOrderData.isEmpty && !_loadingRegions)
-                    _loadRegions();
-                }
-                // Refresh OrdersScreen when navigating to it
-                if (i == 2 && !wasOnOrders) {
-                  _ordersRefreshTrigger.value++;
-                }
-              },
+              onTap: () => _selectTab(i),
               child: Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 18, vertical: 15),

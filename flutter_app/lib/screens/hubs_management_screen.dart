@@ -68,9 +68,8 @@ class _HubsManagementScreenState extends State<HubsManagementScreen> {
   }
 
   Future<void> _addMany() async {
-    final selected = _hubs
-        .where((hub) => _selectedHubIds.contains(hub.id))
-        .toList();
+    final selected =
+        _hubs.where((hub) => _selectedHubIds.contains(hub.id)).toList();
     final pending = selected
         .where((hub) => hub.validationStatus == 'PENDENTE_VALIDACAO')
         .length;
@@ -82,7 +81,8 @@ class _HubsManagementScreenState extends State<HubsManagementScreen> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Adicionar hubs selecionados?'),
-        content: Text('$pending candidatos pendentes serão aprovados e ativados.'),
+        content:
+            Text('$pending candidatos pendentes serão aprovados e ativados.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
@@ -116,7 +116,8 @@ class _HubsManagementScreenState extends State<HubsManagementScreen> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Excluir hubs selecionados?'),
-        content: Text(ids.length.toString() + ' hubs serão removidos permanentemente.'),
+        content: Text(
+            ids.length.toString() + ' hubs serão removidos permanentemente.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
@@ -151,13 +152,17 @@ class _HubsManagementScreenState extends State<HubsManagementScreen> {
       final file = selection.files.single;
       final bytes = file.bytes;
       if (bytes == null || bytes.isEmpty) {
-        throw const FormatException('O arquivo CSV está vazio ou não pôde ser lido.');
+        throw const FormatException(
+            'O arquivo CSV está vazio ou não pôde ser lido.');
       }
       final records = ShipmentCsvService.parseCsv(
         utf8.decode(bytes, allowMalformed: true).replaceFirst('\uFEFF', ''),
       );
-      if (records.length < 2) throw const FormatException('O CSV precisa conter cabeçalho e candidatos.');
-      final headers = records.first.map((value) => value.trim().toLowerCase()).toList();
+      if (records.length < 2)
+        throw const FormatException(
+            'O CSV precisa conter cabeçalho e candidatos.');
+      final headers =
+          records.first.map((value) => value.trim().toLowerCase()).toList();
       String value(List<String> row, List<String> aliases) {
         for (final alias in aliases) {
           final index = headers.indexOf(alias);
@@ -165,12 +170,15 @@ class _HubsManagementScreenState extends State<HubsManagementScreen> {
         }
         return '';
       }
+
       double? number(String raw, String column, int line) {
         if (raw.isEmpty) return null;
         final parsed = double.tryParse(raw.replaceAll(',', '.'));
-        if (parsed == null || !parsed.isFinite) throw FormatException('Linha $line: valor inválido em $column.');
+        if (parsed == null || !parsed.isFinite)
+          throw FormatException('Linha $line: valor inválido em $column.');
         return parsed;
       }
+
       final candidates = <Map<String, dynamic>>[];
       for (var i = 1; i < records.length; i++) {
         final row = records[i];
@@ -183,10 +191,19 @@ class _HubsManagementScreenState extends State<HubsManagementScreen> {
         final osmId = value(row, ['osm_id']);
         final latitude = number(value(row, ['latitude']), 'latitude', line);
         final longitude = number(value(row, ['longitude']), 'longitude', line);
-        if (code.isEmpty || name.length < 2 || state.length != 2 || osmId.isEmpty) {
-          throw FormatException('Linha $line: code, nome, UF e osm_id são obrigatórios.');
+        if (code.isEmpty ||
+            name.length < 2 ||
+            state.length != 2 ||
+            osmId.isEmpty) {
+          throw FormatException(
+              'Linha $line: code, nome, UF e osm_id são obrigatórios.');
         }
-        if (latitude == null || longitude == null || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+        if (latitude == null ||
+            longitude == null ||
+            latitude < -90 ||
+            latitude > 90 ||
+            longitude < -180 ||
+            longitude > 180) {
           throw FormatException('Linha $line: latitude ou longitude inválida.');
         }
         candidates.add({
@@ -198,7 +215,8 @@ class _HubsManagementScreenState extends State<HubsManagementScreen> {
           'osmId': osmId,
           'latitude': latitude,
           'longitude': longitude,
-          'provisionalCategory': value(row, ['categoria_provisoria', 'tipo_provisorio']),
+          'provisionalCategory':
+              value(row, ['categoria_provisoria', 'tipo_provisorio']),
           'osmTags': value(row, ['etiquetas_osm', 'osm_tags']),
           'operator': value(row, ['operador']),
           'owner': value(row, ['proprietario']),
@@ -208,11 +226,13 @@ class _HubsManagementScreenState extends State<HubsManagementScreen> {
           'justification': value(row, ['justificativa', 'status']),
         });
       }
-      if (candidates.isEmpty) throw const FormatException('Nenhum candidato foi encontrado no CSV.');
+      if (candidates.isEmpty)
+        throw const FormatException('Nenhum candidato foi encontrado no CSV.');
       setState(() => _importing = true);
       final result = await _api.importCandidates(candidates);
       if (!mounted) return;
-      _snack('Importação concluída: ${result['added']} novos, ${result['updated']} atualizados, ${result['unchanged']} sem alterações.');
+      _snack(
+          'Importação concluída: ${result['added']} novos, ${result['updated']} atualizados, ${result['unchanged']} sem alterações.');
       await _load();
     } catch (e) {
       _snack('Não foi possível importar o CSV: $e');
@@ -261,9 +281,8 @@ class _HubsManagementScreenState extends State<HubsManagementScreen> {
       'SE',
       'TO'
     ];
-    final Set<String> selectedStates = (hub?.statesServed ?? [])
-        .where((uf) => allStates.contains(uf))
-        .toSet();
+    final Set<String> selectedStates =
+        (hub?.statesServed ?? []).where((uf) => allStates.contains(uf)).toSet();
 
     final result = await showDialog<bool>(
       context: context,
@@ -595,9 +614,11 @@ class _HubsManagementScreenState extends State<HubsManagementScreen> {
                 _detail('Operador', hub.operatorName),
                 _detail('Proprietário', hub.owner),
                 _detail('Marca', hub.brand),
-                _detail('Coordenadas', hub.latitude == null || hub.longitude == null
-                    ? null
-                    : '${hub.latitude}, ${hub.longitude}'),
+                _detail(
+                    'Coordenadas',
+                    hub.latitude == null || hub.longitude == null
+                        ? null
+                        : '${hub.latitude}, ${hub.longitude}'),
                 _detail('ID OpenStreetMap', hub.osmId),
                 _detail('URL OpenStreetMap', hub.osmUrl),
                 _detail('Etiquetas OSM', hub.osmTags),
@@ -668,7 +689,15 @@ class _HubsManagementScreenState extends State<HubsManagementScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: const Text('Gestão de hubs'), actions: [
-          IconButton(tooltip: 'Importar candidatos CSV', onPressed: _importing ? null : _importCsv, icon: _importing ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.upload_file)),
+          IconButton(
+              tooltip: 'Importar candidatos CSV',
+              onPressed: _importing ? null : _importCsv,
+              icon: _importing
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.upload_file)),
           IconButton(
               tooltip: 'Atualizar',
               onPressed: _load,
@@ -679,227 +708,280 @@ class _HubsManagementScreenState extends State<HubsManagementScreen> {
             icon: const Icon(Icons.add),
             label: const Text('Novo hub')),
         body: SafeArea(
-            child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(children: [
-                  TextField(
-                      controller: _search,
-                      decoration: InputDecoration(
-                          labelText: 'Buscar hubs',
-                          prefixIcon: const Icon(Icons.search),
-                          suffixIcon: IconButton(
-                              onPressed: _load,
-                              icon: const Icon(Icons.search))),
-                      onSubmitted: (_) => _load()),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    value: _validationStatusFilter,
-                    decoration: const InputDecoration(labelText: 'Validação'),
-                    items: const [
-                      DropdownMenuItem(value: 'all', child: Text('Todos')),
-                      DropdownMenuItem(
-                        value: 'PENDENTE_VALIDACAO',
-                        child: Text('Pendentes de validação'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'APROVADO',
-                        child: Text('Aprovados'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'REJEITADO',
-                        child: Text('Rejeitados'),
-                      ),
-                    ],
-                    onChanged: (value) {
-                      setState(() => _validationStatusFilter = value ?? 'all');
-                      _load();
-                    },
-                  ),
-                  SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Incluir hubs inativos'),
-                      value: _includeInactive,
-                      onChanged: (v) {
-                        setState(() => _includeInactive = v);
-                        _load();
-                      }),
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        OutlinedButton.icon(
-                          onPressed: _loading || _hubs.isEmpty
-                              ? null
-                              : () {
-                                  setState(() {
-                                    if (_selectedHubIds.length == _hubs.length) {
-                                      _selectedHubIds.clear();
-                                    } else {
-                                      _selectedHubIds
-                                        ..clear()
-                                        ..addAll(_hubs.map((hub) => hub.id));
-                                    }
-                                  });
-                                },
-                          icon: Icon(_selectedHubIds.length == _hubs.length &&
-                                  _hubs.isNotEmpty
-                              ? Icons.deselect
-                              : Icons.select_all),
-                          label: Text(
-                              _selectedHubIds.length == _hubs.length &&
-                                      _hubs.isNotEmpty
-                                  ? 'Limpar seleção'
-                                  : 'Selecionar todos'),
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: _loading || _selectedHubIds.isEmpty
-                              ? null
-                              : _addMany,
-                          icon: const Icon(Icons.playlist_add),
-                          label: Text('Adicionar selecionados (' +
-                              _selectedHubIds.length.toString() +
-                              ')'),
-                        ),
-                        if (_selectedHubIds.isNotEmpty)
-                          FilledButton.icon(
-                            onPressed: _loading ? null : _deleteSelected,
-                            icon: const Icon(Icons.delete_outline),
-                            label: Text('Excluir selecionados (' +
-                                _selectedHubIds.length.toString() +
-                                ')'),
-                          ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                      child: _loading
-                          ? const Center(child: CircularProgressIndicator())
-                          : _error != null
-                              ? Center(
-                                  child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                      const Icon(Icons.cloud_off, size: 40),
-                                      const SizedBox(height: 8),
-                                      Text(_error!,
-                                          textAlign: TextAlign.center),
-                                      const SizedBox(height: 8),
-                                      OutlinedButton(
+            child: LayoutBuilder(
+                builder: (context, constraints) => SingleChildScrollView(
+                    child: SizedBox(
+                        height: constraints.maxHeight < 500
+                            ? 640
+                            : constraints.maxHeight,
+                        child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(children: [
+                              TextField(
+                                  controller: _search,
+                                  decoration: InputDecoration(
+                                      labelText: 'Buscar hubs',
+                                      prefixIcon: const Icon(Icons.search),
+                                      suffixIcon: IconButton(
                                           onPressed: _load,
-                                          child: const Text('Tentar novamente'))
-                                    ]))
-                              : _hubs.isEmpty
-                                  ? const Center(
-                                      child: Text(
-                                          'Nenhum hub cadastrado. Use “Novo hub” para começar.'))
-                                  : ListView.separated(
-                                      itemCount: _hubs.length,
-                                      separatorBuilder: (_, __) =>
-                                          const Divider(height: 1),
-                                      itemBuilder: (context, index) {
-                                        final hub = _hubs[index];
-                                        return ListTile(
-                                            leading: Checkbox(
-                                                value: _selectedHubIds
-                                                    .contains(hub.id),
-                                                onChanged: (selected) {
-                                                  setState(() {
-                                                    if (selected == true) {
-                                                      _selectedHubIds.add(hub.id);
-                                                    } else {
-                                                      _selectedHubIds
-                                                          .remove(hub.id);
-                                                    }
-                                                  });
-                                                }),
-                                            title: Row(
-                                              children: [
-                                                Expanded(child: Text(hub.name)),
-                                                if (hub.hasPendingCoverage)
-                                                  Tooltip(
-                                                    message:
-                                                        'Cobertura pendente — apenas ${hub.state}',
-                                                    child: Icon(
-                                                      Icons.warning_amber_rounded,
-                                                      size: 18,
-                                                      color: Colors.orange[700],
-                                                    ),
-                                                  )
-                                                else
-                                                  Tooltip(
-                                                    message:
-                                                        'Atende ${hub.statesServed!.length} estado(s): ${hub.statesServed!.join(', ')}',
-                                                    child: Icon(
-                                                      Icons.check_circle,
-                                                      size: 18,
-                                                      color: Colors.green[700],
-                                                    ),
-                                                  ),
-                                              ],
-                                            ),
-                                            onTap: () => _showDetails(hub),
-                                            subtitle: Text(
-                                                '${hub.code} · ${_locationLabel(hub)} · ${hub.validationStatus}'),
-                                            trailing: PopupMenuButton<String>(
-                                                onSelected: (action) {
-                                                  if (action == 'edit')
-                                                    _edit(hub);
-                                                  if (action == 'toggle')
-                                                    _toggle(hub);
-                                                  if (action == 'delete')
-                                                    _delete(hub);
-                                                  if (action == 'details')
-                                                    _showDetails(hub);
-                                                  if (action == 'approve')
-                                                    _setValidationStatus(
-                                                        hub, 'APROVADO');
-                                                  if (action == 'reject')
-                                                    _setValidationStatus(
-                                                        hub, 'REJEITADO');
-                                                  if (action == 'review')
-                                                    _setValidationStatus(hub,
-                                                        'PENDENTE_VALIDACAO');
-                                                },
-                                                itemBuilder: (_) => [
-                                                      const PopupMenuItem(
-                                                          value: 'details',
-                                                          child: Text('Detalhes da fonte')),
-                                                      if (hub.validationStatus == 'PENDENTE_VALIDACAO') ...[
-                                                        const PopupMenuItem(
-                                                            value: 'approve',
-                                                            child: Text('Aprovar candidato')),
-                                                        const PopupMenuItem(
-                                                            value: 'reject',
-                                                            child: Text('Rejeitar candidato')),
-                                                      ],
-                                                      if (hub.validationStatus != 'PENDENTE_VALIDACAO')
-                                                        const PopupMenuItem(
-                                                            value: 'review',
-                                                            child: Text('Devolver para validação')),
-                                                      const PopupMenuItem(
-                                                          value: 'edit',
-                                                          child:
-                                                              Text('Editar')),
-                                                      if (hub.validationStatus == 'APROVADO')
-                                                        PopupMenuItem(
-                                                            value: 'toggle',
-                                                            child: Text(
-                                                                hub.isActive
-                                                                    ? 'Desativar'
-                                                                    : 'Ativar')),
-                                                      const PopupMenuItem(
-                                                          value: 'delete',
-                                                          child:
-                                                              Text('Excluir'))
-                                                    ]));
-                                      })),
-                  const SizedBox(height: 8),
-                  const Text(
-                      'Candidatos do OpenStreetMap precisam de validação antes de serem usados como hubs operacionais.',
-                      style: TextStyle(fontSize: 12),
-                      textAlign: TextAlign.center),
-                ]))),
+                                          icon: const Icon(Icons.search))),
+                                  onSubmitted: (_) => _load()),
+                              const SizedBox(height: 12),
+                              DropdownButtonFormField<String>(
+                                isExpanded: true,
+                                value: _validationStatusFilter,
+                                decoration: const InputDecoration(
+                                    labelText: 'Validação'),
+                                items: const [
+                                  DropdownMenuItem(
+                                      value: 'all', child: Text('Todos')),
+                                  DropdownMenuItem(
+                                    value: 'PENDENTE_VALIDACAO',
+                                    child: Text('Pendentes de validação'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'APROVADO',
+                                    child: Text('Aprovados'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'REJEITADO',
+                                    child: Text('Rejeitados'),
+                                  ),
+                                ],
+                                onChanged: (value) {
+                                  setState(() =>
+                                      _validationStatusFilter = value ?? 'all');
+                                  _load();
+                                },
+                              ),
+                              SwitchListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  title: const Text('Incluir hubs inativos'),
+                                  value: _includeInactive,
+                                  onChanged: (v) {
+                                    setState(() => _includeInactive = v);
+                                    _load();
+                                  }),
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    OutlinedButton.icon(
+                                      onPressed: _loading || _hubs.isEmpty
+                                          ? null
+                                          : () {
+                                              setState(() {
+                                                if (_selectedHubIds.length ==
+                                                    _hubs.length) {
+                                                  _selectedHubIds.clear();
+                                                } else {
+                                                  _selectedHubIds
+                                                    ..clear()
+                                                    ..addAll(_hubs
+                                                        .map((hub) => hub.id));
+                                                }
+                                              });
+                                            },
+                                      icon: Icon(_selectedHubIds.length ==
+                                                  _hubs.length &&
+                                              _hubs.isNotEmpty
+                                          ? Icons.deselect
+                                          : Icons.select_all),
+                                      label: Text(_selectedHubIds.length ==
+                                                  _hubs.length &&
+                                              _hubs.isNotEmpty
+                                          ? 'Limpar seleção'
+                                          : 'Selecionar todos'),
+                                    ),
+                                    OutlinedButton.icon(
+                                      onPressed:
+                                          _loading || _selectedHubIds.isEmpty
+                                              ? null
+                                              : _addMany,
+                                      icon: const Icon(Icons.playlist_add),
+                                      label: Text('Adicionar selecionados (' +
+                                          _selectedHubIds.length.toString() +
+                                          ')'),
+                                    ),
+                                    if (_selectedHubIds.isNotEmpty)
+                                      FilledButton.icon(
+                                        onPressed:
+                                            _loading ? null : _deleteSelected,
+                                        icon: const Icon(Icons.delete_outline),
+                                        label: Text('Excluir selecionados (' +
+                                            _selectedHubIds.length.toString() +
+                                            ')'),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              Expanded(
+                                  child: _loading
+                                      ? const Center(
+                                          child: CircularProgressIndicator())
+                                      : _error != null
+                                          ? Center(
+                                              child: Column(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                  const Icon(Icons.cloud_off,
+                                                      size: 40),
+                                                  const SizedBox(height: 8),
+                                                  Text(_error!,
+                                                      textAlign:
+                                                          TextAlign.center),
+                                                  const SizedBox(height: 8),
+                                                  OutlinedButton(
+                                                      onPressed: _load,
+                                                      child: const Text(
+                                                          'Tentar novamente'))
+                                                ]))
+                                          : _hubs.isEmpty
+                                              ? const Center(
+                                                  child: Text(
+                                                      'Nenhum hub cadastrado. Use “Novo hub” para começar.'))
+                                              : ListView.separated(
+                                                  itemCount: _hubs.length,
+                                                  separatorBuilder: (_, __) =>
+                                                      const Divider(height: 1),
+                                                  itemBuilder:
+                                                      (context, index) {
+                                                    final hub = _hubs[index];
+                                                    return ListTile(
+                                                        leading: Checkbox(
+                                                            value:
+                                                                _selectedHubIds
+                                                                    .contains(
+                                                                        hub.id),
+                                                            onChanged:
+                                                                (selected) {
+                                                              setState(() {
+                                                                if (selected ==
+                                                                    true) {
+                                                                  _selectedHubIds
+                                                                      .add(hub
+                                                                          .id);
+                                                                } else {
+                                                                  _selectedHubIds
+                                                                      .remove(hub
+                                                                          .id);
+                                                                }
+                                                              });
+                                                            }),
+                                                        title: Row(
+                                                          children: [
+                                                            Expanded(
+                                                                child: Text(
+                                                                    hub.name)),
+                                                            if (hub
+                                                                .hasPendingCoverage)
+                                                              Tooltip(
+                                                                message:
+                                                                    'Cobertura pendente — apenas ${hub.state}',
+                                                                child: Icon(
+                                                                  Icons
+                                                                      .warning_amber_rounded,
+                                                                  size: 18,
+                                                                  color: Colors
+                                                                          .orange[
+                                                                      700],
+                                                                ),
+                                                              )
+                                                            else
+                                                              Tooltip(
+                                                                message:
+                                                                    'Atende ${hub.statesServed!.length} estado(s): ${hub.statesServed!.join(', ')}',
+                                                                child: Icon(
+                                                                  Icons
+                                                                      .check_circle,
+                                                                  size: 18,
+                                                                  color: Colors
+                                                                          .green[
+                                                                      700],
+                                                                ),
+                                                              ),
+                                                          ],
+                                                        ),
+                                                        onTap: () =>
+                                                            _showDetails(hub),
+                                                        subtitle: Text(
+                                                            '${hub.code} · ${_locationLabel(hub)} · ${hub.validationStatus}'),
+                                                        trailing:
+                                                            PopupMenuButton<
+                                                                    String>(
+                                                                onSelected:
+                                                                    (action) {
+                                                                  if (action ==
+                                                                      'edit')
+                                                                    _edit(hub);
+                                                                  if (action ==
+                                                                      'toggle')
+                                                                    _toggle(
+                                                                        hub);
+                                                                  if (action ==
+                                                                      'delete')
+                                                                    _delete(
+                                                                        hub);
+                                                                  if (action ==
+                                                                      'details')
+                                                                    _showDetails(
+                                                                        hub);
+                                                                  if (action ==
+                                                                      'approve')
+                                                                    _setValidationStatus(
+                                                                        hub,
+                                                                        'APROVADO');
+                                                                  if (action ==
+                                                                      'reject')
+                                                                    _setValidationStatus(
+                                                                        hub,
+                                                                        'REJEITADO');
+                                                                  if (action ==
+                                                                      'review')
+                                                                    _setValidationStatus(
+                                                                        hub,
+                                                                        'PENDENTE_VALIDACAO');
+                                                                },
+                                                                itemBuilder:
+                                                                    (_) => [
+                                                                          const PopupMenuItem(
+                                                                              value: 'details',
+                                                                              child: Text('Detalhes da fonte')),
+                                                                          if (hub.validationStatus ==
+                                                                              'PENDENTE_VALIDACAO') ...[
+                                                                            const PopupMenuItem(
+                                                                                value: 'approve',
+                                                                                child: Text('Aprovar candidato')),
+                                                                            const PopupMenuItem(
+                                                                                value: 'reject',
+                                                                                child: Text('Rejeitar candidato')),
+                                                                          ],
+                                                                          if (hub.validationStatus !=
+                                                                              'PENDENTE_VALIDACAO')
+                                                                            const PopupMenuItem(
+                                                                                value: 'review',
+                                                                                child: Text('Devolver para validação')),
+                                                                          const PopupMenuItem(
+                                                                              value: 'edit',
+                                                                              child: Text('Editar')),
+                                                                          if (hub.validationStatus ==
+                                                                              'APROVADO')
+                                                                            PopupMenuItem(
+                                                                                value: 'toggle',
+                                                                                child: Text(hub.isActive ? 'Desativar' : 'Ativar')),
+                                                                          const PopupMenuItem(
+                                                                              value: 'delete',
+                                                                              child: Text('Excluir'))
+                                                                        ]));
+                                                  })),
+                              const SizedBox(height: 8),
+                              const Text(
+                                  'Candidatos do OpenStreetMap precisam de validação antes de serem usados como hubs operacionais.',
+                                  style: TextStyle(fontSize: 12),
+                                  textAlign: TextAlign.center),
+                            ])))))),
       );
 }

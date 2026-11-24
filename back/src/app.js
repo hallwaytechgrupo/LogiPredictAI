@@ -22,6 +22,8 @@ import path from 'node:path';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { createPredictRouter } from './routes/predict.js';
+import { RoadRoutingService, validRoutePoint } from './road-routing.js';
+import { cloudRequest } from './db/cloud-context.js';
 
 // Repositórios PostgreSQL (fallback para JSON)
 import {
@@ -72,16 +74,21 @@ export async function createApp({
   predictReferenceFile,
   batchConcurrency = parseInt(process.env.BATCH_CONCURRENCY, 10) || 5,
   batchSize = parseInt(process.env.BATCH_SIZE, 10) || 200,
+  roadRouting = new RoadRoutingService(),
+  store = null,
+  corsOrigins = process.env.CORS_ORIGINS?.split(',').map((origin) => origin.trim()).filter(Boolean) ?? [],
+  mlToken = process.env.ML_SERVICE_TOKEN ?? '',
 } = {}) {
   const app = express();
   app.disable('x-powered-by');
   app.use(helmet());
+  if (store) app.use((_req, _res, next) => cloudRequest(store, next));
 
   // Permitir chamadas do Flutter Web durante o desenvolvimento local.
   app.use((req, res, next) => {
     const origin = req.headers.origin;
 
-    if (origin && /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)) {
+    if (origin && (/^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin) || corsOrigins.includes(origin))) {
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.vary('Origin');
       res.setHeader(
@@ -342,6 +349,7 @@ export async function createApp({
   }
 
   async function readHubs() {
+    if (store) return (await store.read('hubs')).map((hub) => ({ ...hub, validationStatus: hub.validationStatus ?? 'APROVADO' }));
     try {
       const content = await readFile(hubsFile, 'utf8');
       const parsed = JSON.parse(content);
@@ -357,6 +365,7 @@ export async function createApp({
   }
 
   async function writeHubs(hubs) {
+    if (store) return store.replace('hubs', hubs);
     await mkdir(path.dirname(hubsFile), { recursive: true });
     const temp = `${hubsFile}.${process.pid}.tmp`;
     await writeFile(temp, `${JSON.stringify(hubs, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
@@ -365,6 +374,7 @@ export async function createApp({
   }
 
   async function readOrders() {
+    if (store) return store.read('orders');
     // Tenta PostgreSQL primeiro; se indisponível, fallback para JSON.
     // Mescla resultados do DB e do JSON para suportar testes que usam JSON.
     let dbOrders = [];
@@ -400,6 +410,7 @@ export async function createApp({
   }
 
   async function writeOrders(orders) {
+    if (store) return store.replace('orders', orders);
     await mkdir(path.dirname(ordersFile), { recursive: true });
     const temp = `${ordersFile}.${process.pid}.tmp`;
     await writeFile(temp, `${JSON.stringify(orders, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
@@ -408,6 +419,7 @@ export async function createApp({
   }
 
   async function readPredictions() {
+    if (store) return store.read('predictions');
     // Tenta PostgreSQL primeiro; se indisponível, fallback para JSON/JSONL.
     const dbOk = await checkPredictionsDb();
     if (dbOk) {
@@ -448,6 +460,7 @@ export async function createApp({
   }
 
   async function appendPrediction(prediction) {
+    if (store) return store.appendPredictions([prediction]);
     // Tenta PostgreSQL primeiro; se indisponível, fallback para JSONL.
     const dbOk = await checkPredictionsDb();
     if (dbOk) {
@@ -568,6 +581,7 @@ export async function createApp({
   }
 
   function handleStorageError(res, error) {
+    if (error.code === 'STORAGE_CONFLICT') return res.status(409).json({ error: error.code, message: error.message });
     // Do not expose local filesystem paths or internal exception details.
     console.error('Falha no armazenamento de hubs:', error.message);
     return res.status(500).json({ error: 'HUB_STORAGE_ERROR', message: 'Não foi possível acessar o cadastro de hubs.' });
@@ -581,7 +595,7 @@ export async function createApp({
       try {
         const upstream = await fetch(new URL(pathname, mlUrl), {
           method,
-          headers: { Accept: 'application/json', ...(method === 'POST' ? { 'Content-Type': 'application/json' } : {}) },
+          headers: { Accept: 'application/json', ...(mlToken ? { Authorization: `Bearer ${mlToken}` } : {}), ...(method === 'POST' ? { 'Content-Type': 'application/json' } : {}) },
           ...(method === 'POST' ? { body: JSON.stringify(req.body ?? {}) } : {}),
           signal: AbortSignal.timeout(timeoutMs),
         });
@@ -623,6 +637,22 @@ export async function createApp({
   }
   app.post('/api/v1/map/simulate', proxy('/map/simulate', 'POST'));
   app.post('/api/v1/map/forecast', proxy('/map/forecast', 'POST'));
+
+  // A rota visual e independente da distancia geografica utilizada pelo modelo.
+  app.post('/api/v1/map/route', async (req, res) => {
+    if (!req.is('application/json')) return res.status(415).json({ error: 'UNSUPPORTED_MEDIA_TYPE', message: 'Envie application/json.' });
+    const { origin, destination } = req.body ?? {};
+    if (!validRoutePoint(origin) || !validRoutePoint(destination)) {
+      return res.status(422).json({ error: 'INVALID_ROUTE_COORDINATES', message: 'Informe latitude e longitude validas para origem e destino.' });
+    }
+    const route = await roadRouting.route([origin, destination]);
+    if (route.error) {
+      const status = route.error === 'OPENROUTE_TIMEOUT' ? 504 : route.error === 'OPENROUTE_NO_ROUTE' ? 404 :
+        ['OPENROUTE_ERROR'].includes(route.error) ? 502 : 503;
+      return res.status(status).json(route);
+    }
+    return res.json({ data: { ...route, source: 'openrouteservice', profile: 'driving-car' } });
+  });
 
   // Agregação de previsões por hub logístico com deduplicação por order_id.
   // Filtra por período (start_date, end_date) e hub_id opcional.
@@ -749,7 +779,7 @@ export async function createApp({
   async function callMlPredict(shipment) {
     const upstream = await fetch(new URL('/predict', mlUrl), {
       method: 'POST',
-      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...(mlToken ? { Authorization: `Bearer ${mlToken}` } : {}) },
       body: JSON.stringify(shipment),
       signal: AbortSignal.timeout(timeoutMs),
     });
@@ -1037,7 +1067,9 @@ export async function createApp({
           if (predictionsToPersist.length > 0) {
             try {
               const dbOk = await checkPredictionsDb();
-              if (dbOk) {
+              if (store) {
+                await store.appendPredictions([...predictionsToPersist]);
+              } else if (dbOk) {
                 // Salvar no PostgreSQL
                 for (const pred of predictionsToPersist) {
                   try {
@@ -1108,7 +1140,7 @@ export async function createApp({
   initGeolocation(geolocationFile);
 
   // Executar migrations do PostgreSQL automaticamente na inicialização
-  try {
+  if (!store) try {
     const { getKnex } = await import('./db/knex.js');
     const knex = getKnex();
     await knex.migrate.latest();
@@ -1123,6 +1155,9 @@ export async function createApp({
   app.locals.predictionsFile = predictionsFile;
   app.locals.geolocationFile = geolocationFile;
   app.locals.readPredictions = readPredictions;
+  app.locals.readOrders = readOrders;
+  app.locals.readHubs = readHubs;
+  app.locals.store = store;
   app.locals.serializeOrderMutation = serializeOrderMutation;
   app.locals.writeOrders = writeOrders;
 
@@ -1786,7 +1821,9 @@ export async function createApp({
       await writeOrders(remainingOrders);
 
       // Rebuild predictions.jsonl keeping only non-matching predictions
-      if (matchingPredictions > 0) {
+      if (store && matchingPredictions > 0) {
+        await store.replace('predictions', predictions.filter((prediction) => !matchingOrderIds.has(prediction.order_id)));
+      } else if (matchingPredictions > 0) {
         const remainingPredictions = predictions.filter((p) => !matchingOrderIds.has(p.order_id));
         await serializePredictionMutation(async () => {
           await mkdir(path.dirname(predictionJournalFile), { recursive: true });
@@ -1801,7 +1838,7 @@ export async function createApp({
       }
 
       // Also update predictions.json if it exists
-      try {
+      if (!store) try {
         const predJsonContent = await readFile(predictionsFile, 'utf8');
         const predJson = JSON.parse(predJsonContent);
         if (Array.isArray(predJson)) {
