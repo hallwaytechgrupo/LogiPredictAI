@@ -1,0 +1,7 @@
+artifacts/
+referencias/
+novos_modelos/
+*.zip
+__pycache__/
+*.egg-info/
+training_inputs/

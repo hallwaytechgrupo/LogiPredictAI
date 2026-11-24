@@ -1,0 +1,17 @@
+{
+  "distance_km": 477.4432628867541,
+  "total_weight_g": 1400.0,
+  "total_volume_cm3": 12800.0,
+  "price": 129.89,
+  "freight_value": 16.88,
+  "purchase_at": "2018-04-25T20:57:38",
+  "dispatched_at": "2018-05-29T12:28:00",
+  "estimated_delivery_at": "2018-05-24T00:00:00",
+  "seller_state": "SP",
+  "customer_state": "MG",
+  "items_count": 1,
+  "sellers_count": 1,
+  "seller_id": "6fd52c528dcb38be2eea044946b811f8",
+  "origin_prefix5": "08180",
+  "destination_prefix5": "31260"
+}
