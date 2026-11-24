@@ -130,6 +130,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Map<String, dynamic>? _selectedOrder;
   String _orderSearchQuery = '';
   List<Map<String, dynamic>> _orderSearchResults = [];
+  int _orderSearchRequestId = 0;
   bool _searchingOrders = false;
   bool _loadingSelectedOrder = false;
   int _orderSelectionRequest = 0;
@@ -823,6 +824,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// Searches for orders by query string.
   Future<void> _searchOrders() async {
     if (_orderSearchQuery.trim().isEmpty) {
+      _orderSearchRequestId++;
       if (mounted) {
         setState(() {
           _orderSearchResults = [];
@@ -833,6 +835,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     if (!mounted) return;
+    // Cada letra digitada dispara uma busca e as respostas podem chegar fora
+    // de ordem; só a resposta da busca mais recente pode atualizar a lista.
+    final requestId = ++_orderSearchRequestId;
     setState(() {
       _searchingOrders = true;
       _orderSearchError = null;
@@ -845,13 +850,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         perPage: 20,
       );
       final data = response['data'] as List? ?? [];
-      if (!mounted) return;
+      if (!mounted || requestId != _orderSearchRequestId) return;
       setState(() {
         _orderSearchResults = data.whereType<Map<String, dynamic>>().toList();
         _searchingOrders = false;
       });
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || requestId != _orderSearchRequestId) return;
       setState(() {
         _orderSearchError = error.toString();
         _searchingOrders = false;

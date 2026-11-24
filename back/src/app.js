@@ -648,7 +648,7 @@ export async function createApp({
     const route = await roadRouting.route([origin, destination]);
     if (route.error) {
       const status = route.error === 'OPENROUTE_TIMEOUT' ? 504 : route.error === 'OPENROUTE_NO_ROUTE' ? 404 :
-        ['OPENROUTE_ERROR'].includes(route.error) ? 502 : 503;
+        ['OPENROUTE_ERROR', 'OPENROUTE_UNAUTHORIZED', 'OPENROUTE_GONE'].includes(route.error) ? 502 : 503;
       return res.status(status).json(route);
     }
     return res.json({ data: { ...route, source: 'openrouteservice', profile: 'driving-car' } });

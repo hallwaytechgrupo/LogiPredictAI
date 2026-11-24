@@ -152,7 +152,7 @@ class HubAnalyticsApi {
   HubAnalyticsApi({
     http.Client? client,
     String? baseUrl,
-    Duration timeout = const Duration(seconds: 15),
+    Duration timeout = const Duration(seconds: 45),
   })  : _client = client ?? http.Client(),
         _timeout = timeout,
         _baseUrl = (baseUrl ?? ApiConfiguration.legacyBaseUrl())

@@ -1,5 +1,7 @@
 /** Trajetos rodoviarios em GeoJSON, consultados somente pelo servidor. */
-const DIRECTIONS_URL = 'https://api.openrouteservice.org/v2/directions/driving-car/geojson';
+// api.openrouteservice.org foi desligado pela HeiGIT em 24/11/2026 (HTTP 410).
+// As mesmas chaves funcionam no endereço unificado api.heigit.org.
+export const DEFAULT_DIRECTIONS_URL = 'https://api.heigit.org/openrouteservice/v2/directions/driving-car/geojson';
 
 export function validRoutePoint(point) {
   return point && Number.isFinite(point.latitude) && Math.abs(point.latitude) <= 90 &&
@@ -8,6 +10,7 @@ export function validRoutePoint(point) {
 
 export async function requestRoadRoute(waypoints, {
   apiKey = process.env.OPENROUTE_API_KEY,
+  directionsUrl = process.env.OPENROUTE_DIRECTIONS_URL || DEFAULT_DIRECTIONS_URL,
   fetchImpl = (...args) => globalThis.fetch(...args),
   timeoutMs = 10000,
 } = {}) {
@@ -16,7 +19,7 @@ export async function requestRoadRoute(waypoints, {
     return { error: 'INVALID_ROUTE_COORDINATES', message: 'Informe coordenadas validas para origem e destino.' };
   }
   try {
-    const response = await fetchImpl(DIRECTIONS_URL, {
+    const response = await fetchImpl(directionsUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: apiKey },
       body: JSON.stringify({
@@ -28,6 +31,8 @@ export async function requestRoadRoute(waypoints, {
     });
     if (!response.ok) {
       if (response.status === 429) return { error: 'OPENROUTE_RATE_LIMIT', message: 'O servico de rotas atingiu seu limite de consultas. Tente novamente mais tarde.' };
+      if (response.status === 401 || response.status === 403) return { error: 'OPENROUTE_UNAUTHORIZED', message: 'A chave do servico de rotas foi recusada pelo provedor.' };
+      if (response.status === 410) return { error: 'OPENROUTE_GONE', message: 'O endereco do servico de rotas foi desativado pelo provedor.' };
       if (response.status === 404) return { error: 'OPENROUTE_NO_ROUTE', message: 'Nao foi encontrada uma rota rodoviaria entre os locais informados.' };
       return { error: 'OPENROUTE_ERROR', message: `O servico de rotas retornou HTTP ${response.status}.` };
     }

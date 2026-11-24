@@ -16,7 +16,7 @@ class ServerConnection {
     try {
       final health = await connection
           .get(Uri.parse('$base/health'))
-          .timeout(const Duration(seconds: 8));
+          .timeout(const Duration(seconds: 30));
       final data = jsonDecode(health.body);
       if (health.statusCode != 200 ||
           data is! Map ||
@@ -28,7 +28,7 @@ class ServerConnection {
       try {
         final ready = await connection
             .get(Uri.parse('$base/ready'))
-            .timeout(const Duration(seconds: 15));
+            .timeout(const Duration(seconds: 45));
         final result = jsonDecode(ready.body);
         return ServerConnectionStatus(
             predictionReady: ready.statusCode == 200 &&

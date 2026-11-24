@@ -433,7 +433,7 @@ class _PredictionMapScreenState extends State<PredictionMapScreen> {
             SizedBox(width: 14),
             Expanded(
                 child: Text(
-                    'Monte sua entrega no painel à esquerda. O mapa mostrará a origem, o destino e a classificação calculada pelo modelo.',
+                    'Preencha os dados da entrega e toque em Calcular risco. O mapa mostrará a origem, o destino e a classificação calculada pelo modelo.',
                     style: TextStyle(color: Color(0xFF64748B), height: 1.5)))
           ]));
     }

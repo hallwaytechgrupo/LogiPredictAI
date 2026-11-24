@@ -211,9 +211,42 @@ extension _DashboardAnalyticsScreen on _DashboardScreenState {
                       ],
                     ),
                     const SizedBox(height: 18),
-                    SizedBox(
-                      height: 340,
-                      child: BarChart(_barChartData(states)),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        // Em telas estreitas (Android), cada estado precisa de
+                        // espaço mínimo para a barra e a sigla não se
+                        // sobreporem; nesse caso o gráfico rola na horizontal.
+                        const axisWidth = 44.0;
+                        const minSlot = 26.0;
+                        final count = states
+                            .where((s) => _intValue(s['orders']) > 0)
+                            .length;
+                        final minWidth = axisWidth + count * minSlot;
+                        final width = constraints.maxWidth >= minWidth
+                            ? constraints.maxWidth
+                            : minWidth;
+                        final slot = count > 0
+                            ? (width - axisWidth) / count
+                            : minSlot;
+                        final chart = SizedBox(
+                          width: width,
+                          height: 350,
+                          child: Padding(
+                            // Espaço para o rótulo do topo do eixo não ser
+                            // cortado pelo contêiner com rolagem.
+                            padding: const EdgeInsets.only(top: 10),
+                            child: BarChart(_barChartData(
+                              states,
+                              barWidth: (slot * .55).clamp(6.0, 16.0),
+                            )),
+                          ),
+                        );
+                        if (width <= constraints.maxWidth) return chart;
+                        return SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: chart,
+                        );
+                      },
                     ),
                     const SizedBox(height: 8),
                     Text(
@@ -429,7 +462,10 @@ extension _DashboardAnalyticsScreen on _DashboardScreenState {
     );
   }
 
-  BarChartData _barChartData(List<Map<String, dynamic>> states) {
+  BarChartData _barChartData(
+    List<Map<String, dynamic>> states, {
+    double barWidth = 16,
+  }) {
     final chartStates =
         states.where((state) => _intValue(state['orders']) > 0).toList();
     final maxRate = chartStates.fold<double>(
@@ -440,12 +476,16 @@ extension _DashboardAnalyticsScreen on _DashboardScreenState {
       },
     );
 
+    final axis = _rateAxis(maxRate);
+
     return BarChartData(
-      maxY: maxRate > 0 ? (maxRate * 1.18).clamp(5.0, 100.0) : 5,
+      minY: 0,
+      maxY: axis.maxY,
       alignment: BarChartAlignment.spaceAround,
       gridData: FlGridData(
         show: true,
         drawVerticalLine: false,
+        horizontalInterval: axis.interval,
         getDrawingHorizontalLine: (value) => FlLine(
           color: _border,
           strokeWidth: 1,
@@ -484,10 +524,19 @@ extension _DashboardAnalyticsScreen on _DashboardScreenState {
           sideTitles: SideTitles(
             showTitles: true,
             reservedSize: 44,
-            getTitlesWidget: (value, meta) => Text(
-              '${value.toStringAsFixed(0)}%',
-              style: TextStyle(fontSize: 10, color: _secondaryText),
-            ),
+            interval: axis.interval,
+            getTitlesWidget: (value, meta) {
+              // Só desenha rótulos em múltiplos exatos do intervalo; evita
+              // que o limite do eixo gere um rótulo sobreposto ao anterior.
+              final steps = value / axis.interval;
+              if ((steps - steps.round()).abs() > 1e-6) {
+                return const SizedBox.shrink();
+              }
+              return Text(
+                '${value.round()}%',
+                style: TextStyle(fontSize: 10, color: _secondaryText),
+              );
+            },
           ),
         ),
         bottomTitles: AxisTitles(
@@ -528,7 +577,7 @@ extension _DashboardAnalyticsScreen on _DashboardScreenState {
             BarChartRodData(
               toY: rate,
               color: color,
-              width: chartStates.length > 22 ? 10 : 16,
+              width: barWidth,
               borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(5),
               ),
@@ -539,4 +588,16 @@ extension _DashboardAnalyticsScreen on _DashboardScreenState {
     );
   }
 
+  /// Escala do eixo Y com limite superior múltiplo do intervalo das linhas,
+  /// para que o último rótulo nunca fique sobreposto ao penúltimo.
+  ({double maxY, double interval}) _rateAxis(double maxRate) {
+    final target = maxRate > 0 ? (maxRate * 1.15).clamp(5.0, 100.0) : 5.0;
+    const steps = [1.0, 2.0, 5.0, 10.0, 20.0, 25.0];
+    final interval = steps.firstWhere(
+      (step) => target / step <= 6,
+      orElse: () => 25.0,
+    );
+    final maxY = ((target / interval).ceil() * interval).clamp(interval, 100.0);
+    return (maxY: maxY.toDouble(), interval: interval);
+  }
 }

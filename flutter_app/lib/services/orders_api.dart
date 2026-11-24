@@ -53,15 +53,15 @@ class OrdersApi {
       if (method == 'POST') {
         response = await _client
             .post(uri, headers: headers, body: jsonEncode(body))
-            .timeout(const Duration(seconds: 20));
+            .timeout(const Duration(seconds: 45));
       } else if (method == 'PATCH') {
         response = await _client
             .patch(uri, headers: headers, body: jsonEncode(body))
-            .timeout(const Duration(seconds: 20));
+            .timeout(const Duration(seconds: 45));
       } else {
         response = await _client
             .get(uri, headers: headers)
-            .timeout(const Duration(seconds: 15));
+            .timeout(const Duration(seconds: 45));
       }
     } catch (error) {
       throw OrdersApiException(
@@ -167,7 +167,7 @@ class OrdersApi {
     try {
       response = await _client
           .get(uri, headers: headers)
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 45));
     } catch (error) {
       throw OrdersApiException(
           'Não foi possível acessar a API de pedidos: $error');

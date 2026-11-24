@@ -101,7 +101,7 @@ class DispatchApi {
     try {
       response = await _client
           .post(uri, headers: headers, body: body)
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 45));
     } catch (error) {
       throw DispatchApiException(
           'Não foi possível acessar a API de geolocalização: $error');

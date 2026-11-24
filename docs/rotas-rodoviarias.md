@@ -21,6 +21,11 @@ OPENROUTE_API_KEY=sua_chave
 
 A variável pode ser definida diretamente no ambiente do servidor. Ela tem
 prioridade sobre o arquivo local. Reinicie o Node.js depois de configurar.
+O backend consulta `https://api.heigit.org/openrouteservice/v2/directions/driving-car/geojson`.
+O endereço antigo `api.openrouteservice.org` foi desligado pela HeiGIT em
+24/11/2026 e responde HTTP 410; as mesmas chaves funcionam no novo endereço.
+Se o provedor mudar de novo, defina `OPENROUTE_DIRECTIONS_URL` no servidor.
+
 O arquivo `.env` fica fora do Git; a chave é enviada ao provedor pelo cabeçalho
 `Authorization` e não acompanha respostas, URLs do mapa, código Web ou APK.
 

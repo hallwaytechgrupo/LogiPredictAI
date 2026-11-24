@@ -1634,12 +1634,19 @@ extension _DashboardSimulatorScreen on _DashboardScreenState {
                   initialZoom: zoom,
                 ),
                 children: [
+                  // O OpenStreetMap bloqueia (HTTP 403) os subdomínios
+                  // antigos {s}. e apps sem identificação; usa o mesmo
+                  // servidor e User-Agent do mapa principal.
                   TileLayer(
                     urlTemplate:
-                        'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.hallwaytech.logipredict',
                   ),
                   MarkerLayer(markers: markers),
                   if (polylines.isNotEmpty) PolylineLayer(polylines: polylines),
+                  const SimpleAttributionWidget(
+                    source: Text('OpenStreetMap contributors'),
+                  ),
                 ],
               ),
             ),

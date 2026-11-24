@@ -161,7 +161,7 @@ class LogiPredictApi {
   static Future<List<Map<String, dynamic>>> fetchStateAnalytics() async {
     final uri = Uri.parse('$baseUrl/api/v1/analytics/states');
 
-    final response = await http.get(uri).timeout(const Duration(seconds: 15));
+    final response = await http.get(uri).timeout(const Duration(seconds: 45));
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception(

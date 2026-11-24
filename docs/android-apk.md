@@ -7,26 +7,30 @@ do celular.
 
 ## APK para compartilhar: nuvem e rotas
 
-A versão **1.0.2+3** usa por padrão a API HTTPS publicada e inclui o trajeto
+A versão **1.0.4+5** usa por padrão a API HTTPS publicada e inclui o trajeto
 pelas estradas em **Mapa → Simular**. Em uma instalação nova, basta ter internet;
 o computador do apresentador não precisa ficar ligado. A disponibilidade
 continua sujeita aos créditos dos serviços da nuvem e ao provedor de rotas.
 
 A cópia local para envio fica em
-`reports/local/android/LogiPredictAI-1.0.2-nuvem-rotas.apk`. Envie esse arquivo
+`reports/local/android/LogiPredictAI-1.0.4-nuvem.apk`. Envie esse arquivo
 ao Android e permita a instalação pela aplicação usada para recebê-lo, caso
 o sistema solicite. O APK é de demonstração, fora da Play Store.
 
 Uma atualização preserva a conexão salva anteriormente. Se o aparelho ainda
 apontar para USB ou IP local, abra **Conexão com o servidor**, informe
 `https://igors-lima12--logipredict-cloud-api.us-east.modal.run`, teste e salve.
-Não é necessário desinstalar nem apagar os dados do aplicativo.
+A versão 1.0.4 foi assinada com a chave de desenvolvimento de outro
+computador: em aparelhos com 1.0.2 ou anterior, desinstale a versão antiga
+antes de instalar.
 
-O build 1.0.2 foi conferido com as ferramentas do Android: versão e pacote
-corretos, assinatura compatível com 1.0.1 e URL da nuvem presente nas três
-arquiteturas. O servidor retornou uma rota SP–RJ de 432,25 km pelo
-OpenRouteService. Esta compilação ainda precisa de conferência física no
-aparelho; a verificação de assinatura e servidor não substitui esse teste.
+O build 1.0.4 foi instalado e testado por USB em um Samsung A36 (Android 16)
+em 24/11/2026: rota SP–RJ de 432,3 km em **Mapa → Simular**, previsão com
+alternativas, histórico por região, gráfico de Análises, Pedidos, Hubs e
+simulação de despacho com mapa e rota de 443,56 km. Em relação à 1.0.2, corrige
+o eixo do gráfico de Análises, a busca de pedidos importados (respostas fora
+de ordem), os blocos do mapa da aba Simular bloqueados pelo OpenStreetMap
+(HTTP 403) e amplia os tempos-limite para o início a frio da nuvem.
 
 ## Compilar
 
@@ -39,7 +43,7 @@ Na raiz do projeto, em PowerShell:
 ```powershell
 cd flutter_app
 flutter pub get
-flutter build apk --release --build-name=1.0.2 --build-number=3 --dart-define=API_BASE_URL=https://igors-lima12--logipredict-cloud-api.us-east.modal.run
+flutter build apk --release --build-name=1.0.4 --build-number=5 --dart-define=API_BASE_URL=https://igors-lima12--logipredict-cloud-api.us-east.modal.run
 ```
 
 O arquivo é gerado em:

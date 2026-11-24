@@ -19,6 +19,8 @@ test('roads use GeoJSON, longitude first, and the key only in the authorization 
     return response();
   } });
   assert.equal(new URL(sent.url).search, '');
+  // api.openrouteservice.org responde 410 desde 24/11/2026.
+  assert.equal(sent.url, 'https://api.heigit.org/openrouteservice/v2/directions/driving-car/geojson');
   assert.equal(sent.options.headers.Authorization, 'private-test-key');
   assert.deepEqual(JSON.parse(sent.options.body).coordinates, [[-46.63, -23.55], [-43.17, -22.90]]);
   assert.equal(JSON.parse(sent.options.body).instructions, false);
@@ -40,7 +42,11 @@ test('the same provider preserves the legacy multi-hub distance contract', async
 test('missing key, invalid coordinates, failed responses and timeouts do not invent a road', async () => {
   assert.equal((await requestRoadRoute(points, { apiKey: '' })).error, 'OPENROUTE_KEY_MISSING');
   assert.equal((await requestRoadRoute([{ latitude: 100, longitude: 0 }, points[1]], { apiKey: 'x' })).error, 'INVALID_ROUTE_COORDINATES');
-  for (const status of [401, 404, 429, 500]) {
+  for (const [status, code] of [[401, 'OPENROUTE_UNAUTHORIZED'], [403, 'OPENROUTE_UNAUTHORIZED'], [410, 'OPENROUTE_GONE']]) {
+    const result = await requestRoadRoute(points, { apiKey: 'x', fetchImpl: async () => ({ ok: false, status }) });
+    assert.equal(result.error, code);
+  }
+  for (const status of [401, 404, 410, 429, 500]) {
     const result = await requestRoadRoute(points, { apiKey: 'x', fetchImpl: async () => ({ ok: false, status }) });
     assert.ok(result.error);
     assert.equal(result.geometry, undefined);
