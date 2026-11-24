@@ -81,6 +81,7 @@ somente no servidor. O frontend e o APK recebem somente a URL pública da API.
 Na raiz do projeto, com o ambiente de publicação preparado:
 
 ```powershell
+$env:PYTHONUTF8 = '1'
 .\reports\local\cloud-venv\Scripts\python.exe deploy/cloud/configure_secrets.py
 .\reports\local\cloud-venv\Scripts\python.exe -m modal deploy deploy/cloud/app.py
 ```
@@ -121,7 +122,9 @@ O endereço local salvo anteriormente só muda quando o usuário salva o novo.
 - Backend: 165 testes aprovados e dois ignorados na execução padrão. Os dois
   casos ignorados exigem bancos de teste explicitamente configurados.
 - PostgreSQL Neon: testes de persistência, concorrência, API e CORS executados
-  na branch separada `validacao-cloud-20261124`.
+  na branch separada `validacao-cloud-20261124`. O fluxo adicional importou um
+  CSV, consultou o ML remoto e confirmou a previsão salva em outra conexão;
+  os três testes dessa execução passaram.
 - Python: 58 testes aprovados, incluindo proteção do serviço ML e cenários.
 - Flutter Web: build de produção apontando para a API HTTPS.
 - Requisições reais na nuvem: saúde, modelo 564, previsão de compra futura,

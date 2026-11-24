@@ -41,6 +41,8 @@ test('persistência em PostgreSQL, concorrência e API sem depender de arquivos 
   assert.equal(results.find((result) => result.status === 'rejected').reason.code, 'STORAGE_CONFLICT');
 
   const app = await createApp({ store, hubsFile: 'arquivo-inexistente.json', ordersFile: 'arquivo-inexistente.json',
+    mlUrl: process.env.CLOUD_TEST_ML_URL ?? 'http://127.0.0.1:8000',
+    timeoutMs: 90000,
     corsOrigins: ['https://hallwaytechgrupo.github.io'] });
   const server = app.listen(0, '127.0.0.1');
   await new Promise((resolve) => server.once('listening', resolve));
@@ -60,4 +62,29 @@ test('persistência em PostgreSQL, concorrência e API sem depender de arquivos 
   assert.equal(response.headers.get('access-control-allow-origin'), 'https://hallwaytechgrupo.github.io');
   response = await fetch(`${base}/health`, { headers: { Origin: 'https://outro-site.example' } });
   assert.equal(response.headers.get('access-control-allow-origin'), null);
+
+  const csv = 'order_id;origin_zip_code;destination_zip_code;purchase_at;dispatched_at;estimated_delivery_at;seller_state;customer_state;items_count;sellers_count;price;freight_value;total_weight_g;total_volume_cm3;status\n'
+    + `${id}-CSV;01001000;20040002;2026-12-23T09:00:00;2026-12-24T15:00:00;2027-01-04T18:00:00;SP;RJ;1;1;100;20;500;1200;processing`;
+  response = await fetch(`${base}/api/v1/orders/import-csv`, { method: 'POST', headers, body: JSON.stringify({ csv }) });
+  assert.equal(response.status, 200);
+  const imported = await response.json();
+  assert.equal(imported.imported, 1, JSON.stringify(imported));
+  response = await fetch(`${base}/api/v1/orders/${id}-CSV`);
+  const detail = (await response.json()).data;
+  assert.equal(detail.total_weight_g, 500);
+  assert.equal(detail.status, 'processing');
+  await t.test('previsão remota permanece disponível em outra conexão', {
+    skip: !process.env.CLOUD_TEST_ML_URL,
+  }, async () => {
+    response = await fetch(`${base}/api/v1/predictions?order_id=${id}-CSV`, { method: 'POST', headers,
+      body: JSON.stringify({ purchase_at: detail.purchase_at, dispatched_at: detail.dispatched_at,
+        estimated_delivery_at: detail.estimated_delivery_at, seller_state: 'SP', customer_state: 'RJ',
+        distance_km: 360, total_weight_g: 500, total_volume_cm3: 1200, items_count: 1,
+        sellers_count: 1, price: 100, freight_value: 20 }) });
+    assert.equal(response.status, 200);
+    const prediction = await response.json();
+    assert.equal(prediction.persisted, true);
+    await second.run(async () => assert.ok((await second.read('predictions'))
+      .some((record) => record.prediction_id === prediction.prediction_id)));
+  });
 });
