@@ -1,259 +1,212 @@
-# 📦 LogiPredict AI — entrega consolidada
-
 <div align="center">
 
-**Previsão de risco de atraso com dados reais da Olist**<br>
-Flutter Web · Leaflet · Node.js · FastAPI · Random Forest · CatBoost
+# 📦 LogiPredict AI
 
-**Versão de entrega: `main` · Atualização de 22/11/2026**
+**Previsão de risco de atraso em entregas do e-commerce brasileiro, com dados reais da Olist**
 
-[Começar](#como-executar-esta-versão) · [Mapa](#mapa-planejar-uma-compra-futura) · [Modelos e resultados](#modelos-finais-e-resultados) · [Guia da demonstração](docs/mapa-e-demonstracao.md) · [Preparação da feira](docs/entrega-final-abp.md)
+Projeto Integrador · Desenvolvimento de Software Multiplataforma · FATEC Jacareí<br>
+**[HallwayTech](https://github.com/hallwaytechgrupo) & [Octacode](https://github.com/octacodeteam)**
 
-[Aplicativo Android e APK](docs/android-apk.md)
+![Flutter](https://img.shields.io/badge/Flutter-Web%20%7C%20Android-02569B?logo=flutter&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-22+-339933?logo=nodedotjs&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?logo=postgresql&logoColor=white)
+![scikit-learn](https://img.shields.io/badge/scikit--learn-F7931E?logo=scikitlearn&logoColor=white)
+![CatBoost](https://img.shields.io/badge/CatBoost-FFCC00?logoColor=black)
+
+[**🚀 Acessar a demonstração online**](https://logipredict-ai-abp.pages.dev)
+
+[Visão geral](#-visão-geral) · [Funcionalidades](#-funcionalidades) · [Como funciona](#-como-funciona) · [Modelos e resultados](#-modelos-e-resultados) · [Executar](#-como-executar) · [API](#-api) · [Documentação](#-documentação) · [Equipe](#-equipe)
 
 </div>
 
-> **Versão atual:** a `main` reúne a aplicação, o mapa logístico, os dois
-> notebooks finais, os pesos treinados, o catálogo geográfico e os resultados
-> da avaliação. O mapa usa o modelo 564 + filtro contextual.
+---
 
-## O que esta atualização entrega
+## 🎯 Visão geral
+
+O **LogiPredict AI** ajuda a antecipar quais entregas têm maior risco de atrasar **antes do despacho**. Você informa uma compra planejada (origem, destino, datas, prazo prometido e características do pacote) e a plataforma devolve uma classificação de risco **Baixo, Médio ou Alto**, mostra o trajeto por estradas no mapa e compara alternativas de despacho e de prazo.
+
+A previsão é feita por modelos de Machine Learning treinados **offline** com o dataset público da Olist (2016–2018). Ao clicar em **Calcular risco**, o serviço apenas carrega os pesos já treinados e analisa a entrada: nenhum modelo é retreinado e a simulação não vira um pedido salvo.
+
+> ⚠️ **Projeto acadêmico.** Os resultados são retrospectivos e exploratórios. Veja as [limitações](#-limitações-importantes) antes de interpretar qualquer número.
+
+## ✨ Funcionalidades
 
 | Área | O que está disponível |
 | --- | --- |
 | **Planejamento de entregas** | Simulação de uma compra futura com datas, origem, destino, peso, volume, quantidade e valores |
-| **Mapa interativo** | Leaflet com ruas/cidades do OpenStreetMap, formulário à esquerda e classificação da entrega |
-| **Trajeto rodoviário** | Percurso por estradas no Web e no Android, distância e tempo de direção pelo OpenRouteService, com cache no backend |
-| **Histórico regional** | Atrasos observados na Olist por região e UF, com hubs cadastrados no mapa |
-| **Comparação de alternativas** | Novas previsões ao variar o despacho ou o prazo, com indicação de feriados no intervalo |
-| **Aprendizagem de máquina** | Modelo 564 + filtro utilizado pelo novo mapa; modelo 613 + filtro preservado para comparação |
-| **Operação existente** | Simulador logístico, importação CSV, consulta de pedidos, indicadores e gestão de hubs mantidos |
-| **Integração** | Flutter → API Node.js → serviço Python → pesos treinados, com validações e mensagens de erro/carregamento |
+| **Mapa interativo** | Leaflet com OpenStreetMap, formulário lateral e classificação da entrega |
+| **Trajeto rodoviário** | Percurso por estradas (Web e Android), com distância e tempo de direção via OpenRouteService e cache no backend |
+| **Histórico regional** | Atrasos observados na base Olist por região e UF, com hubs cadastrados no mapa |
+| **Comparação de alternativas** | Novas previsões ao variar a data de despacho ou o prazo, com feriados do intervalo indicados |
+| **Operação logística** | Simulador logístico, importação de pedidos por CSV, consulta de pedidos, indicadores e gestão de hubs |
+| **Multiplataforma** | Flutter Web e aplicativo Android, com servidor configurável por USB, Wi-Fi ou HTTPS |
+| **Nuvem** | Frontend, API, inferência e banco em serviços independentes |
 
-```mermaid
-flowchart LR
-    U[Compra planejada no formulário] --> F[Flutter Web e Leaflet]
-    F --> N[API Node.js]
-    N --> P[Serviço Python FastAPI]
-    P --> M[Modelo 564 + filtro contextual]
-    M --> R[Baixo, Médio ou Alto]
-    R --> F
-    H[Histórico real Olist] --> P
-```
-
-O treinamento acontece offline. Ao clicar em **Calcular risco**, o serviço
-carrega os pesos preservados e analisa as entradas; não treina outro modelo
-nem transforma a simulação em um pedido operacional salvo.
-
-## Mapa: planejar uma compra futura
+## 🖼️ Demonstração
 
 ![Simulação de uma compra futura com formulário lateral e mapa Leaflet](docs/images/mapa-simulacao-futura.jpg)
 
-*A imagem mostra um cenário hipotético de compra em 23/12. A classificação é
-retornada pelo modelo preservado, e os feriados aparecem como contexto.*
+*Cenário hipotético de compra em 23/12: a classificação vem do modelo preservado e os feriados aparecem como contexto.*
+
+![Trajeto rodoviário no mapa de planejamento](docs/images/mapa-rota-rodoviaria.png)
+
+*Percurso por estradas calculado pelo OpenRouteService.*
+
+**Passo a passo**
 
 1. Abra **Mapa de Calor Logístico → Simular nova entrega**.
-2. Pesquise origem e destino por **CEP ou cidade** e selecione uma sugestão.
+2. Pesquise origem e destino por **CEP ou cidade** e escolha uma sugestão.
 3. Informe compra, despacho, prazo prometido e características da encomenda.
-4. Clique em **Calcular risco** para consultar a classificação, o trajeto
-   geográfico e as alternativas comparadas.
-5. Para conhecer o fluxo, use **Exemplo: compra em 23/12** e depois altere os
-   campos para pesquisar outros cenários.
+4. Clique em **Calcular risco** para ver a classificação, o trajeto e as alternativas.
+5. Quer só conhecer o fluxo? Use **Exemplo: compra em 23/12** e altere os campos.
 
-O formulário não exige selecionar um pedido antigo. Os locais vêm de um catálogo
-real de **19.011 prefixos CEP**; as coordenadas são aproximadas. O ID do vendedor
-é opcional: quando não informado, a análise usa o contexto de rota/região,
-sem atribuir ao pedido o histórico de outro vendedor. O catálogo também preserva
-**3.095 vendedores reais** para consultas compatíveis com a base.
+Os locais vêm de um catálogo real de **19.011 prefixos de CEP** (coordenadas aproximadas) e o catálogo também preserva **3.095 vendedores reais**. O ID do vendedor é opcional: sem ele, a análise usa o contexto de rota e região, sem atribuir ao pedido o histórico de outro vendedor. Mais detalhes no [guia do mapa e da demonstração](docs/mapa-e-demonstracao.md).
 
-As faixas representam a decisão das duas etapas do modelo:
+## 🧠 Como funciona
+
+```mermaid
+flowchart LR
+    U[Compra planejada] --> F[Flutter Web / Android<br/>+ Leaflet]
+    F --> N[API Node.js<br/>Express 5]
+    N --> P[Serviço Python<br/>FastAPI]
+    P --> M[Modelo 564 + filtro contextual]
+    M --> R[Baixo · Médio · Alto]
+    R --> F
+    H[Histórico real Olist] --> P
+    N --> DB[(PostgreSQL<br/>ou JSON local)]
+    N --> O[OpenRouteService<br/>trajeto rodoviário]
+```
+
+A classificação reflete as duas etapas de decisão do modelo:
 
 | Faixa | Interpretação |
 | --- | --- |
-| **Baixo** | A primeira etapa não gerou alerta de atraso |
-| **Médio** | A primeira etapa gerou alerta e o filtro contextual o retirou |
-| **Alto** | O modelo final manteve o alerta |
+| 🟢 **Baixo** | A primeira etapa não gerou alerta de atraso |
+| 🟡 **Médio** | A primeira etapa gerou alerta, mas o filtro contextual o retirou |
+| 🔴 **Alto** | O modelo final manteve o alerta |
 
-Na vista **Histórico por região**, as taxas são atrasos que ocorreram na base,
-não previsões para novas compras. Selecione uma região na lista para aproximar
-ou clique no nome da região no mapa para consultar suas UFs.
+Na vista **Histórico por região**, as taxas são atrasos que **de fato ocorreram** na base, e não previsões para novas compras.
 
-Para reduzir o custo de navegação, apenas um mapa fica ativo. O histórico usa
-cache de CSVs/agregados, a busca de CEP não inicializa o modelo e a previsão
-futura não recalcula a avaliação dos 19.258 pedidos antigos. Zoom e arraste
-ficam sob controle do Leaflet, sem repassar movimentos do mouse ao Flutter.
-As ruas do OpenStreetMap precisam de internet; a biblioteca Leaflet é local.
+## 📊 Modelos e resultados
 
-O planejamento também permite visualizar o percurso pelas estradas. Consulte
-o [guia de rotas rodoviárias](docs/rotas-rodoviarias.md) para configurar o
-OpenRouteService e testar a consulta. A distância rodoviária complementa a
-visualização; os atributos usados pelo modelo preservado continuam iguais.
+A avaliação preservada contém **19.258 pedidos, dos quais 704 foram atrasos reais**.
 
-## Modelos finais e resultados
-
-A avaliação preservada contém **19.258 pedidos, sendo 704 atrasos reais**.
-
-| Resultado | **564 + filtro — usado no novo mapa** | **613 + filtro — alternativa preservada** |
+| Resultado | **564 + filtro** (usado no mapa) | **613 + filtro** (alternativa preservada) |
 | --- | ---: | ---: |
 | Atrasos reais encontrados | 564 | 613 |
 | Atrasos não detectados | 140 | 91 |
 | Falsos alertas de atraso | 4.358 | 6.774 |
 | Entregas no prazo sem alerta | 14.196 | 11.780 |
-| Recall: proporção dos atrasos encontrados | 80,11% | 87,07% |
-| Precisão: proporção dos alertas que eram atrasos | 11,46% | 8,30% |
+| Recall (atrasos encontrados) | 80,11% | 87,07% |
+| Precisão (alertas que eram atrasos) | 11,46% | 8,30% |
 
-O **564 + filtro** combina a Random Forest com um revisor contextual CatBoost.
-O **613 + filtro** preserva a combinação de CatBoost, sobrevivência AFT e filtro
-contextual. O primeiro gera menos falsos alertas; o segundo encontra mais atrasos.
-O novo mapa utiliza exclusivamente o primeiro, versão `modelo_564_filter`.
-Os endpoints anteriores continuam usando seu contrato e modelo original.
+- **564 + filtro:** Random Forest combinada a um revisor contextual CatBoost. Gera menos falsos alertas e é o único modelo usado pelo novo mapa (`modelo_564_filter`).
+- **613 + filtro:** CatBoost, sobrevivência AFT e filtro contextual. Encontra mais atrasos, ao custo de mais falsos alertas.
+- Os endpoints anteriores continuam usando seu contrato e modelo originais.
 
-Os atributos incluem datas de compra/despacho/prazo, origem/destino, distância
-aproximada, peso, volume, quantidade, valor dos produtos, frete e contexto
-histórico disponível antes do despacho. A entrega efetiva do próprio pedido
-não é uma entrada de previsão. Comparações de cenários mantêm o corte histórico
-do cenário base, evitando consultar entregas futuras para sugerir outra data.
+**Atributos de entrada:** datas de compra, despacho e prazo, origem e destino, distância aproximada, peso, volume, quantidade, valor dos produtos, frete e contexto histórico disponível **antes do despacho**. A entrega efetiva do próprio pedido nunca é entrada de previsão, e as comparações de cenário mantêm o corte histórico do cenário base para não consultar entregas futuras.
 
-| Arquivo | Finalidade |
+### Notebooks e artefatos
+
+| Recurso | Finalidade |
 | --- | --- |
 | [Notebook 564 + filtro](ML/modelos_finais/Modelo_564_atrasos_4358_falsos_alertas_140_perdidos.ipynb) | Carregar, explicar e avaliar o modelo selecionado |
 | [Notebook 613 + filtro](ML/modelos_finais/Modelo_613_atrasos_6774_falsos_alertas_91_perdidos.ipynb) | Carregar, explicar e avaliar a alternativa preservada |
-| [Pesos e metadados](ML/modelos_finais/artefatos/) | Modelos `.joblib`, configurações e hashes de integridade |
-| [Dados de avaliação](ML/modelos_finais/dados/) | Amostra real, previsões preservadas e origem dos dados |
-| [Código de apoio](ML/modelos_finais/codigo/) | Transformações, histórico, validação, inferência e reajuste opcional |
+| [`artefatos/`](ML/modelos_finais/artefatos/) | Pesos `.joblib`, configurações e hashes de integridade |
+| [`dados/`](ML/modelos_finais/dados/) | Amostra real de avaliação, previsões preservadas e origem dos dados |
+| [`codigo/`](ML/modelos_finais/codigo/) | Transformações, histórico, validação, inferência e reajuste opcional |
 | [Como abrir os notebooks](ML/modelos_finais/LEIA_ME.md) | Kernel, dependências e explicação dos arquivos |
 
-Abra os notebooks no VS Code, selecione o Python da `.venv` e use **Executar Tudo**.
-A execução padrão carrega os pesos e verifica os resultados; não retreina nem
-sobrescreve os modelos. O reajuste opcional do filtro está documentado no guia
-e exige os dados originais correspondentes. Mantenha as pastas de apoio junto
-dos notebooks.
+Abra os notebooks no VS Code, selecione o Python da `.venv` e use **Executar Tudo**. A execução padrão só carrega os pesos e confere os resultados; não retreina nem sobrescreve nada. O primeiro experimento (Random Forest × baseline, com gráficos) está em [`reports/olist`](reports/olist/README.md).
 
-## Como executar esta versão
+### ⚠️ Limitações importantes
 
-Para atualizar uma cópia local com as alterações já salvas:
+- A base Olist cobre **2016–2018**, não identifica transportadoras e não representa a logística atual.
+- O benchmark é **retrospectivo e exploratório**: o período final já foi consultado em pesquisas anteriores.
+- Dos 564 atrasos encontrados, **434 foram antecipados** e **130 já estavam vencidos no despacho** (no modelo alternativo, 481 e 132).
+- O score **não é uma probabilidade calibrada**, e risco baixo não garante entrega no prazo.
+- Feriados entram como contexto de calendário: o modelo não aprende um efeito explícito de feriado nem comprova causa de atraso.
+- Renegociar o prazo não acelera o transporte. Uma data alternativa só recebe faixa menor quando a comparação realmente a reduz.
 
-```bash
-git switch main
-git pull --ff-only origin main
+## 🧰 Stack
+
+| Camada | Tecnologias | Responsabilidade |
+| --- | --- | --- |
+| **Interface** | Flutter, flutter_map, Leaflet, fl_chart | App Web e Android, mapa, gráficos e formulários |
+| **API pública** | Node.js 22+, Express 5, Helmet, Knex | Rotas REST, validação, pedidos, hubs e integração com ML e rotas |
+| **Inferência** | Python 3.12, FastAPI, Pydantic, joblib | Carrega os pesos e executa as previsões |
+| **Machine Learning** | pandas, NumPy, scikit-learn, CatBoost, SciPy | Features, Random Forest, filtro contextual e avaliação |
+| **Dados** | PostgreSQL (com fallback JSON local), dataset Olist | Persistência e histórico |
+| **Mapas e rotas** | OpenStreetMap, OpenRouteService | Camada de mapa e trajeto rodoviário |
+| **Qualidade** | pytest, `node --test`, `flutter test`, GitHub Actions | Testes nas três camadas e publicação do Web |
+| **Infra** | Docker, Cloudflare Pages, Modal, Neon | Implantação em nuvem |
+
+## 🗂️ Estrutura do repositório
+
+```text
+LogiPredictAI/
+├── back/
+│   ├── src/               # API Node.js (rotas, repositórios, migrações Knex)
+│   ├── test/              # Testes da API (node --test)
+│   ├── ml/                # Serviço FastAPI, catálogo geográfico e pesos usados pela API
+│   └── data/              # CSVs de exemplo e armazenamento JSON local
+├── flutter_app/           # Aplicativo Flutter (Web e Android)
+├── ML/
+│   ├── modelos_finais/    # Notebooks, pesos e dados dos dois modelos finais
+│   ├── final_risk_training/
+│   └── context_review_comparison/   # Estudos de comparação de modelos
+├── reports/olist/         # Resultados do primeiro experimento
+├── deploy/cloud/          # Implantação na nuvem (Modal)
+├── docs/                  # Guias, contrato da API e validações
+└── docker-compose.yml     # Stack local com PostgreSQL, API, ML e Web
 ```
 
-O guia [Iniciar no VS Code / PowerShell](#iniciar-no-vs-code--powershell) descreve
-a instalação das dependências e a execução dos três serviços:
-**Python (8000)**, **Node.js (3001)** e **Flutter (8080)**. A aplicação abre em
-[localhost:8080](http://localhost:8080). Os dois modelos finais e o catálogo
-necessário à nova simulação já acompanham esta versão.
+## 🚀 Como executar
 
-Se os serviços já estavam abertos antes da atualização, encerre-os e inicie-os
-novamente com os comandos do guia. Use **Ctrl+Shift+R** no navegador para
-recarregar os arquivos atuais. Para demonstração no Web, o comando Flutter
-inclui `--release`.
+**Pré-requisitos:** Python 3.12, Node.js 22+, Flutter e Git.
 
-## Aplicativo Android
-
-A interface também funciona como aplicativo Android, com navegação inferior,
-formulários adaptados ao celular e mapa nativo. O endereço do servidor pode ser
-configurado no cabeçalho do aplicativo para conexão por USB, Wi-Fi ou HTTPS.
-O Web mantém o mapa Leaflet e os endereços definidos no build.
-
-Para gerar o APK na pasta `flutter_app`:
+### 1. Clonar e instalar
 
 ```powershell
-flutter pub get
-flutter build apk --release --dart-define=API_BASE_URL=http://127.0.0.1:3001
-```
+git clone https://github.com/hallwaytechgrupo/LogiPredictAI.git
+cd LogiPredictAI
 
-O arquivo fica em `flutter_app/build/app/outputs/flutter-apk/app-release.apk`.
-No celular, o APK substitui o Flutter Web; os serviços Node.js e Python
-continuam necessários no computador ou servidor. O build de demonstração usa
-a chave de desenvolvimento local. A publicação em loja exige assinatura própria.
-
-O [guia Android](docs/android-apk.md) explica instalação, conexão com a API,
-requisitos, testes e limitações.
-
-## API, validação e apresentação
-
-| Endpoint público | Uso |
-| --- | --- |
-| `GET /api/v1/map/locations?q=...` | Buscar CEP, cidade ou UF no catálogo real |
-| `POST /api/v1/map/forecast` | Analisar uma entrega planejada com entradas completas |
-| `GET /api/v1/orders` | Consultar pedidos operacionais importados |
-| `POST /api/v1/predictions` | Executar a previsão do simulador existente |
-| `POST /predict` | Consultar a regra simples de risco com referência histórica, preservada |
-
-[Contrato da API](docs/api.md) · [Arquitetura operacional](docs/evolucao-operacional.md) ·
-[Guia do mapa](docs/mapa-e-demonstracao.md) ·
-[Validações e limites dos testes](docs/validation.md) ·
-[Roteiro e pendências para a ABP/feira](docs/entrega-final-abp.md).
-
-Na validação local desta entrega: **56 testes Python aprovados, 158 Node
-aprovados e 1 ignorado, 67 Flutter aprovados e build Web concluído**.
-Também foram verificados busca de CEP, calendário, previsão, troca entre vistas,
-zoom, arraste e detalhes por UF no navegador. PostgreSQL, Docker e Mobile
-continuam exigindo homologação própria.
-
-> **Limitações da avaliação:** a base Olist é de 2016–2018 e o benchmark
-> é retrospectivo/exploratório, com o período final já consultado em pesquisas
-> anteriores. Dos 564 atrasos encontrados, 434 foram antecipados e 130 já
-> estavam vencidos no despacho; no alternativo, são 481 e 132. O score não é
-> uma probabilidade calibrada, e baixo risco não garante entrega no prazo.
-> Feriados fixos nacionais aparecem como contexto de calendário; o modelo
-> não aprende um efeito explícito de feriado nem comprova causa de atraso.
-> Renegociar o prazo não acelera o transporte. Uma data alternativa só recebe
-> sugestão de faixa menor quando a comparação realmente reduz essa faixa.
-
----
-
-## Guias e histórico do projeto
-
-As próximas seções detalham a instalação, os recursos da plataforma e os
-resultados das primeiras sprints.
-
-# LogiPredict AI — versão integrada
-
-Plataforma acadêmica para pesquisar entregas e apoiar o acompanhamento de risco
-de atraso no e-commerce, com dados históricos reais da Olist. Flutter Web,
-Node.js e Python/FastAPI, com modelos treinados offline.
-
-A `main` contém a aplicação completa e os dois modelos finais de classificação
-de risco. A `machineLearning` reúne os experimentos e a pesquisa dos modelos.
-
-[Guia do mapa e demonstração](docs/mapa-e-demonstracao.md) ·
-[Preparação da ABP e da feira](docs/entrega-final-abp.md) ·
-[API](docs/api.md) · [Notebooks finais](ML/modelos_finais/LEIA_ME.md).
-
-## Recursos atuais
-
-- Simulador logístico, importação de pedidos, indicadores e cadastro de hubs.
-- Simulação de compra futura com datas, origem, destino, CEP e dados do pacote.
-- Comparação de cenários com o **modelo 564 + filtro CatBoost**, preservado.
-- Leaflet no navegador, com ruas/cidades, histórico por região e apenas um mapa ativo.
-- Validações, estados de carregamento/erro e testes nas três camadas.
-- PostgreSQL com fallback JSON nos fluxos operacionais existentes.
-
-## Iniciar no VS Code / PowerShell
-
-Pré-requisitos: Python 3.12, Node.js 22+ e Flutter. Na raiz do repositório,
-instale as dependências uma vez, mantendo a `.venv` se ela já existe:
-
-```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r back\ml\requirements-docker.txt
 npm.cmd ci --prefix back
 cd flutter_app
 flutter pub get
+cd ..
 ```
 
-Abra três terminais, **cada um começando na raiz**:
+<details>
+<summary>Linux / macOS</summary>
 
-**Terminal 1 — Python**
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -r back/ml/requirements-docker.txt
+npm ci --prefix back
+(cd flutter_app && flutter pub get)
+```
+
+Nos comandos dos terminais abaixo, troque `.\.venv\Scripts\python.exe` por `.venv/bin/python`, `npm.cmd` por `npm` e use `export VAR=valor` no lugar de `$env:VAR = 'valor'`.
+
+</details>
+
+### 2. Subir os três serviços
+
+Abra três terminais, **cada um começando na raiz do repositório**.
+
+**Terminal 1 — Python (porta 8000)**
 
 ```powershell
 cd back\ml
 ..\..\.venv\Scripts\python.exe -m uvicorn logipredict.service:app --host 127.0.0.1 --port 8000
 ```
 
-**Terminal 2 — Node.js**
+**Terminal 2 — Node.js (porta 3001)**
 
 ```powershell
 cd back
@@ -264,44 +217,61 @@ $env:PREDICTIONS_JOURNAL_FILE = 'data/hubs/predictions.jsonl'
 npm.cmd start
 ```
 
-**Terminal 3 — Flutter**
+**Terminal 3 — Flutter (porta 8080)**
 
 ```powershell
 cd flutter_app
 flutter run -d chrome --release --web-port 8080 --dart-define=API_BASE_URL=http://127.0.0.1:3001
 ```
 
-Abra [a aplicação local](http://localhost:8080) e entre em **Mapa de Calor
-Logístico → Simular nova entrega**. O formulário à esquerda recebe uma compra
-planejada, sem selecionar um pedido antigo. **Histórico por região** consulta as taxas observadas.
-Os pesos e o catálogo estão versionados; o novo mapa não exige retreinamento,
-download dos CSVs originais ou PostgreSQL. Encerre instâncias anteriores antes
-de reiniciar nas mesmas portas.
+Abra [localhost:8080](http://localhost:8080) e entre em **Mapa de Calor Logístico → Simular nova entrega**.
 
-## Resultado do modelo do novo mapa
+Os pesos e o catálogo geográfico já estão versionados: **não é preciso** retreinar, baixar os CSVs originais da Olist nem ter PostgreSQL (sem banco, a API usa os arquivos JSON). Encerre instâncias anteriores antes de reiniciar nas mesmas portas e use **Ctrl+Shift+R** no navegador para recarregar a interface.
 
-| Resultado retrospectivo | Modelo 564 + filtro |
-| --- | ---: |
-| Pedidos avaliados / atrasos reais | 19.258 / 704 |
-| Atrasos encontrados / não detectados | 564 / 140 |
-| Falsos alertas / entregas no prazo sem alerta | 4.358 / 14.196 |
-| Recall / precisão dos alertas | 80,11% / 11,46% |
+### 3. Trajeto rodoviário (opcional)
 
-Dos 564, **434 foram antecipações e 130 já estavam vencidos no despacho**.
-O score não é uma probabilidade calibrada. O teste final foi consultado durante
-as pesquisas anteriores: o resultado é exploratório, sem comprovar desempenho
-em uma operação nova. A base é de 2016–2018 e não identifica transportadora.
+O percurso por estradas usa o OpenRouteService. Para ativá-lo, defina `OPENROUTE_API_KEY` antes de iniciar a API. O passo a passo está no [guia de rotas rodoviárias](docs/rotas-rodoviarias.md). Sem a chave, a previsão continua funcionando normalmente.
 
-As faixas baixo/médio/alto representam as duas etapas da decisão: sem alerta
-inicial, alerta retirado pelo filtro e alerta mantido. Feriados são contexto do
-calendário; este modelo não usa feriado como atributo explícito. Renegociar um
-prazo não acelera a entrega física. A simulação não altera pedidos salvos.
+### Docker (opcional)
 
-O modelo alternativo de 613 atrasos e 6.774 falsos alertas está preservado para
-comparação. O novo mapa utiliza exclusivamente `modelo_564_filter`; as rotas
-antigas mantêm seu contrato e modelo original.
+O [`docker-compose.yml`](docker-compose.yml) sobe PostgreSQL (PostGIS), serviço de ML, API e Web (porta 8080):
 
-## Testar
+```bash
+docker compose up -d --build
+```
+
+> O compose monta alguns CSVs brutos da Olist a partir de `back/data/raw/` (geolocalização, pedidos e clientes). Baixe-os do Kaggle antes de usar o fluxo completo; veja [`docs/data-science.md`](docs/data-science.md). Builds Docker e PostgreSQL exigem homologação própria.
+
+## 📱 Aplicativo Android
+
+A mesma interface funciona como app Android, com navegação inferior, formulários adaptados ao celular e mapa nativo. O endereço do servidor é configurável no cabeçalho do aplicativo.
+
+```powershell
+cd flutter_app
+flutter pub get
+flutter build apk --release --dart-define=API_BASE_URL=http://127.0.0.1:3001
+```
+
+O APK fica em `flutter_app/build/app/outputs/flutter-apk/app-release.apk`. O app substitui apenas o Flutter Web: a API Node.js e o serviço Python continuam necessários (no computador ou na nuvem). O build de demonstração usa a chave de desenvolvimento local; publicar em loja exige assinatura própria. Veja o [guia Android](docs/android-apk.md).
+
+## 🔌 API
+
+| Endpoint | Uso |
+| --- | --- |
+| `GET /health` · `GET /ready` | Saúde da API e disponibilidade do modelo |
+| `GET /api/v1/map/locations?q=...` | Buscar CEP, cidade ou UF no catálogo real |
+| `POST /api/v1/map/forecast` | Analisar uma entrega planejada com entradas completas |
+| `POST /api/v1/map/route` | Trajeto rodoviário entre origem e destino |
+| `GET /api/v1/orders` | Consultar pedidos operacionais importados |
+| `POST /api/v1/orders/import-csv` | Importar pedidos por CSV |
+| `POST /api/v1/predictions` | Previsão do simulador existente |
+| `GET/POST /api/v1/hubs` | Listar e cadastrar hubs |
+| `GET /api/v1/analytics/states` | Agregados históricos por UF |
+| `POST /predict` | Regra simples de risco com referência histórica (BE-03, preservada) |
+
+Contrato completo, erros e exemplos em [`docs/api.md`](docs/api.md).
+
+## 🧪 Testes
 
 ```powershell
 $env:PYTHONPATH = 'back/ml'
@@ -311,236 +281,59 @@ cd flutter_app
 flutter test
 ```
 
-O teste do mapa reproduz todas as previsões preservadas e verifica a matriz
-564/4358/140/14196. Há testes de filtros, cenários, isolamento temporal e
-regressão nas telas existentes. Testes com PostgreSQL e builds Docker/Mobile
-exigem homologação própria.
+Os testes cobrem as três camadas: o teste do mapa reproduz todas as previsões preservadas e confere a matriz 564 / 4.358 / 140 / 14.196, além de filtros, cenários, isolamento temporal e regressão nas telas existentes. Os números da última validação e o que ainda exige homologação própria (PostgreSQL, Docker e Mobile em aparelho) estão em [`docs/validation.md`](docs/validation.md).
 
-<details>
-<summary>Documentação original da Sprint 1 — registro histórico</summary>
+## ☁️ Execução em nuvem
 
-Os comandos e o estado das funcionalidades abaixo registram a primeira etapa.
-Para executar e apresentar a aplicação atual, use os guias acima.
-
-<div align="center">
-
-# 📦 LogiPredict AI
-
-**Gestão logística e previsão de atrasos no e-commerce brasileiro**
-
-Projeto Integrador · Desenvolvimento de Software Multiplataforma · FATEC Jacareí
-
-**[HallwayTech](https://github.com/hallwaytechgrupo) & [Octacode](https://github.com/octacodeteam)**
-
-[Objetivo](#-objetivo-do-projeto) · [Entrega atual](#-entrega-atual) · [Executar](#-como-executar) · [Resultados](#-resultados-do-primeiro-experimento) · [Backlog](docs/backlog.md) · [Sprints](#-sprints) · [Equipe](#-equipe)
-
-</div>
-
----
-
-## 🎯 Objetivo do projeto
-
-Antecipar o risco de atraso de pedidos no momento do despacho, apoiando gestores de e-commerce na priorização do acompanhamento logístico. A solução usa dados públicos brasileiros da Olist, processamento e Machine Learning em Python e uma API em Node.js.
-
-A visão do produto inclui uma interface **Flutter Web e Mobile** com consulta de risco e visualização de gargalos no Brasil. **A interface é uma etapa futura:** a primeira entrega concentra ciência de dados, treinamento e integração inicial da API.
-
-## 📖 Problema e proposta
-
-Distância, características dos produtos e prazo prometido podem influenciar a entrega. O projeto investiga essas relações para classificar pedidos com maior risco de atraso e consultar a distribuição histórica de atrasos por UF.
-
-A unidade desta versão é o **pedido**, pois a base não individualiza pacotes nem identifica transportadoras. A distância é uma aproximação em linha reta entre origem e destino. O sistema ainda não estima uma nova data de entrega nem identifica a causa de um atraso.
-
-## ✅ Entrega atual
-
-| Recurso | Situação |
+| Componente | Serviço |
 | --- | --- |
-| Download oficial da Olist e registro da origem | Implementado |
-| Limpeza, validação e integração de seis CSVs | Implementado |
-| Engenharia de atributos disponíveis no despacho | Implementado |
-| Treino Random Forest e comparação com baseline | Executado com a Olist real |
-| Avaliação temporal, métricas e gráficos | [Relatório disponível](reports/olist/README.md) |
-| Inferência Python com validação e OpenAPI | Implementado |
-| API Node.js consumindo o serviço Python | Implementado |
-| Agregados históricos por UF | Implementado; sem mapa nesta fase |
-| Testes Python, Node.js e integração completa | Executados localmente |
-| Automação de testes no GitHub Actions | Configurada; execução remota após envio |
-| Autenticação, persistência e regras operacionais | Backlog da próxima review |
-| Flutter Web/Mobile e mapa interativo | Planejado |
+| Flutter Web | Cloudflare Pages |
+| API Node.js | Modal |
+| Inferência Python | Modal (função independente) |
+| PostgreSQL | Neon (plano Free) |
 
-## 🧰 Tecnologias
+Acesso público: **[logipredict-ai-abp.pages.dev](https://logipredict-ai-abp.pages.dev)**. Como usa franquias gratuitas, o primeiro acesso após um período ocioso pode demorar, e a disponibilidade depende dos créditos restantes. Detalhes, endereços e limites no [guia de nuvem](docs/nuvem.md). O GitHub Pages permanece como alternativa via [`.github/workflows/pages.yml`](.github/workflows/pages.yml).
 
-| Camada | Tecnologias | Responsabilidade |
-| --- | --- | --- |
-| Dados e IA | Python, pandas, NumPy, scikit-learn | Limpeza, features, Random Forest e avaliação |
-| Inferência | FastAPI, Pydantic, joblib | Carregamento do modelo, validação e previsões |
-| API pública | Node.js 22+, Express 5, Helmet | Rotas REST e integração com o serviço Python |
-| Relatórios | Matplotlib e JSON/CSV | Métricas, gráficos e rastreabilidade |
-| Qualidade | pytest, Ruff, node:test, GitHub Actions | Testes e verificações automatizadas |
-| Interface futura | Flutter | Aplicação Web e Mobile |
+## 📚 Documentação
 
-## 🏗️ Arquitetura
+| Documento | Conteúdo |
+| --- | --- |
+| [Guia do mapa e demonstração](docs/mapa-e-demonstracao.md) | Roteiro de uso e apresentação |
+| [Contrato da API](docs/api.md) | Endpoints, payloads e erros |
+| [Arquitetura operacional](docs/evolucao-operacional.md) | Como as camadas se conectam |
+| [Rotas rodoviárias](docs/rotas-rodoviarias.md) | Configuração do OpenRouteService |
+| [Android e APK](docs/android-apk.md) | Build, instalação e limitações |
+| [Validações e limites dos testes](docs/validation.md) | Resultados dos testes e pendências |
+| [Preparação da ABP e da feira](docs/entrega-final-abp.md) | Roteiro e pendências da entrega |
+| [Ciência de dados](docs/data-science.md) | Protocolo de dados e treinamento |
+| [Backlog](docs/backlog.md) · [Sprint 1](docs/sprints/sprint-1.md) | Requisitos e histórico da primeira entrega |
 
-```mermaid
-flowchart LR
-    A[Olist CSV] --> B[Limpeza e features Python]
-    B --> C[Treino temporal Random Forest]
-    C --> D[Artefato e relatórios]
-    D --> E[Serviço Python FastAPI]
-    F[Cliente HTTP / futuro Flutter] --> G[API Node.js]
-    G --> E
-    E --> G
-    G --> F
-```
-
-O modelo é treinado offline e carregado uma vez pelo serviço Python. A API Node.js o consulta por HTTP interno. [Detalhes da arquitetura](docs/architecture.md).
-
-## 🗂️ Estrutura e branches
+## 🌿 Branches
 
 | Branch | Finalidade |
 | --- | --- |
-| `main` | Documentação geral, proposta, backlog e evidências acadêmicas |
-| `back` | API Node.js, pipeline e serviço de IA Python, testes e documentação |
-| `front` | Reservada ao desenvolvimento futuro da interface Flutter |
-| `machineLearning` | Branch já existente na origem; preservada nesta entrega |
+| `main` | Versão de entrega: aplicação, mapa, modelos finais e documentação |
+| `machineLearning` | Experimentos e pesquisa dos modelos |
+| `back` · `front` | Desenvolvimento das camadas de API e interface nas primeiras sprints |
 
-Estrutura disponível em `back`:
+## 📈 Gestão do projeto
 
-```text
-LogiPredictAI/
-├── api/                   # API Node.js e testes
-├── ml/
-│   ├── logipredict/        # Preparação, features, treino e inferência
-│   └── tests/              # Testes do pipeline e serviço
-├── data/
-│   ├── raw/               # CSVs Olist locais, ignorados pelo Git
-│   └── processed/         # Base por pedido, ignorada pelo Git
-├── models/                # Artefatos locais, ignorados pelo Git
-├── reports/olist/          # Resultados agregados do experimento real
-├── examples/              # JSON de previsão e requisições HTTP
-├── scripts/               # Download, execução local e teste integrado
-├── docs/                  # Backlog, API, arquitetura e sprint
-├── .github/workflows/     # Integração contínua
-├── pyproject.toml         # Dependências diretas do Python
-└── requirements.lock       # Versões do ambiente validado
-```
+O desenvolvimento foi acompanhado no **EntregaLab**, nossa ferramenta de gestão de tarefas com quadro Kanban, lista e dashboard. Ao final da Sprint, o backlog foi totalmente entregue: **15 de 15 tarefas concluídas**, sem pendências, itens em revisão ou atrasos.
 
-[Fluxo de publicação de main e back](docs/github.md). A branch `front` não é necessária para a primeira sprint.
+![Dashboard do projeto no EntregaLab](docs/images/entregalab-dashboard.png)
 
-## 🚀 Como executar
+<details>
+<summary>Evolução das tarefas (14/10 a 24/11/2026)</summary>
 
-Pré-requisitos: **Python 3.12 ou 3.13**, **Node.js 22+**, npm e Git. Ambiente verificado nesta entrega: Windows, Python 3.13 e Node 22.
+![Evolução do projeto: total de tarefas × concluídas](docs/images/entregalab-evolucao.png)
 
-### 1. Obter o código e instalar
+</details>
 
-```powershell
-git clone https://github.com/hallwaytechgrupo/LogiPredictAI.git
-cd LogiPredictAI
-git switch back
-py -3.13 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.lock
-.\.venv\Scripts\python.exe -m pip install -e '.[dev]'
-npm.cmd ci --prefix api
-```
-
-Na cópia local preparada para esta entrega, o ambiente e o modelo real já foram gerados. Em uma nova máquina, siga as próximas etapas. No Linux/macOS, crie o ambiente com `python3 -m venv .venv`, use `.venv/bin/python` e `npm` nos comandos.
-
-### 2. Baixar, tratar e treinar com a Olist
-
-```powershell
-.\.venv\Scripts\python.exe scripts/download_olist.py
-.\.venv\Scripts\python.exe -m logipredict.prepare
-.\.venv\Scripts\python.exe -m logipredict.train --source olist --model-dir models/olist --report-dir reports/local/olist
-```
-
-Se o Kaggle solicitar login, use o download manual descrito em [data/README.md](data/README.md). O script evita sobrescrever CSVs existentes. [Protocolo de dados e treinamento](docs/data-science.md).
-
-### 3. Iniciar os dois serviços
-
-```powershell
-.\.venv\Scripts\python.exe scripts/run_local.py
-```
-
-- API: [http://127.0.0.1:3001/health](http://127.0.0.1:3001/health).
-- Disponibilidade do modelo: [http://127.0.0.1:3001/ready](http://127.0.0.1:3001/ready).
-- OpenAPI interativa do serviço Python: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
-- `Ctrl+C` encerra ambos. Logs em `reports/local/`. Portas alternativas: `--port 3010 --ml-port 8010`.
-
-Para iniciar separadamente, na raiz execute `python -m uvicorn logipredict.service:app --host 127.0.0.1 --port 8000` com o Python do ambiente virtual; em outro terminal entre em `api` e execute `npm.cmd start`.
-
-### 4. Consultar uma previsão
-
-Em outro terminal, na raiz:
-
-```powershell
-$body = Get-Content examples/prediction.json -Raw
-Invoke-RestMethod http://127.0.0.1:3001/api/v1/predictions -Method Post -ContentType 'application/json' -Body $body
-```
-
-O retorno inclui score de atraso, decisão, limiar, versão do modelo, origem dos dados e avisos. [Contrato completo e erros](docs/api.md).
-
-### Alternativa: demonstração sem baixar a Olist
-
-```powershell
-.\.venv\Scripts\python.exe -m logipredict.demo
-.\.venv\Scripts\python.exe -m logipredict.train --input data/processed/demo.csv --source synthetic --model-dir models/demo --report-dir reports/local/demo
-.\.venv\Scripts\python.exe scripts/run_local.py --model-dir models/demo
-```
-
-Essa alternativa usa **dados artificiais**, identificados como `synthetic: true`. Verifica instalação e integração; não demonstra desempenho real na Olist.
-
-## 📊 Resultados do primeiro experimento
-
-Fonte: Olist v2. Dos **99.441 pedidos**, **96.281** passaram pelos critérios de limpeza e elegibilidade. A classe atraso representa 6,78% dessa amostra. O teste temporal contém 19.258 pedidos, com 704 atrasos (3,66%).
-
-| Métrica no teste temporal | Random Forest | Baseline majoritária |
-| --- | ---: | ---: |
-| Precisão dos alertas | 12,84% | 0,00% |
-| Recall dos atrasos | 75,85% | 0,00% |
-| F1 | 0,2196 | 0,0000 |
-| Average Precision (AP) | 0,3692 | 0,0366 |
-| ROC AUC | 0,8667 | 0,5000 |
-| Acurácia | 80,29% | 96,34% |
-| Brier score (menor é melhor) | 0,1018 | 0,0354 |
-
-Com limiar de **0,39**, escolhido somente na validação, o modelo detectou 534 dos 704 atrasos, mas gerou **3.625 falsos alertas**. A baseline tem alta acurácia por sempre prever a classe predominante e não detectar atrasos. O Random Forest melhora a ordenação de risco, mas sua baixa precisão e Brier pior evidenciam que o score ainda precisa de calibração e validação operacional.
-
-![Matriz de confusão no teste temporal Olist](reports/olist/confusion_matrix.png)
-
-[Relatório e gráficos](reports/olist/README.md) · [Qualidade dos dados](reports/olist/data_quality.json) · [Métricas e parâmetros](reports/olist/metrics.json)
-
-Os resultados são uma referência inicial reproduzível, sem afirmar prontidão comercial. A base cobre 2016–2018, não identifica transportadoras e não descreve o cenário logístico atual.
-
-## 🧪 Testes
-
-```powershell
-.\.venv\Scripts\python.exe -m pytest -q
-.\.venv\Scripts\python.exe -m ruff check ml scripts
-npm.cmd test --prefix api
-npm.cmd run check --prefix api
-.\.venv\Scripts\python.exe scripts/run_local.py --smoke
-```
-
-O último comando inicia os serviços, testa a integração com o modelo real e os encerra. Execute-o com as portas livres. Para testar serviços já iniciados, use `python scripts/smoke_test.py` com o ambiente virtual. A CI usa dados sintéticos para verificar o fluxo sem depender do download externo.
-
-## 📅 Sprints
-
-| Fase | Objetivo | Evidência / planejamento |
-| --- | --- | --- |
-| 1ª review | Ciência de dados, IA e estrutura inicial da API | [Sprint 1 e roteiro de apresentação](docs/sprints/sprint-1.md) |
-| 2ª review | Regras, autenticação, persistência e validação do modelo | [Backlog](docs/backlog.md) |
-| Etapa seguinte | Flutter Web/Mobile e mapa | Planejamento a refinar |
-
-Calendário das sprints 2 e 3, responsáveis por tarefas e aceite das reviews: a definir pela equipe. [Requisitos e histórias de usuário](docs/backlog.md).
-
-Review da Sprint 1 informada para **20/10/2026**. [Cronograma proposto e cartões para o EntregaLab](docs/cronograma-entregalab.md) · [Explicação, testes e evolução do modelo](docs/guia-projeto-e-testes.md) · [Descrição pronta para o PR da Sprint 1](docs/pr-sprint-1.md).
-
-## 📚 Metodologia
-
-O projeto adota **Scrum**, com backlog priorizado, entregas incrementais, acompanhamento das tarefas e revisões ao fim de cada sprint. A documentação reúne a visão do produto e evidências técnicas para apoiar refinamento e avaliação acadêmica. [Como contribuir](CONTRIBUTING.md).
+O fluxo de trabalho segue Scrum, com backlog priorizado e entregas incrementais ([backlog](docs/backlog.md) · [cronograma](docs/cronograma-entregalab.md)).
 
 ## 👥 Equipe
 
-| Integrante | Papel informado no projeto | GitHub |
+| Integrante | Papel | GitHub |
 | --- | --- | --- |
 | Marcos Oliveira | Product Owner | [@MarckNero](https://github.com/marcknero) |
 | Gustavo Hammes | Scrum Master | [@GustavoHammes](https://github.com/GustavoHammes) |
@@ -551,17 +344,10 @@ O projeto adota **Scrum**, com backlog priorizado, entregas incrementais, acompa
 
 **Professor Focal Point:** Leandro Toss Hoffmann.
 
-</details>
+## 🤝 Contribuindo
 
-## Execução em nuvem
+O projeto adota **Scrum**, com backlog priorizado e entregas incrementais. Veja [CONTRIBUTING.md](CONTRIBUTING.md). Não versione CSVs brutos da Olist, `.env`, credenciais, ambientes virtuais ou `node_modules`, e não use informações futuras (avaliação do cliente, status final, entrega efetiva) como preditores.
 
-A aplicação também dispõe de implantação gerenciada com frontend Flutter Web,
-API Node.js e inferência Python em serviços independentes, além de PostgreSQL
-separado no Neon. O mapa mantém os pesos do modelo **564 + filtro contextual**.
+## 📄 Dados e atribuição
 
-**Acesso público:** [LogiPredict AI](https://logipredict-ai-abp.pages.dev),
-com interface hospedada no Cloudflare Pages.
-
-Consulte o [guia de implantação e testes na nuvem](docs/nuvem.md) para os
-endereços, configuração do APK, persistência e limites das franquias gratuitas.
-As instruções de execução local continuam disponíveis neste README.
+Os dados vêm do [dataset público da Olist no Kaggle](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce), sujeitos à licença do próprio dataset. Mapas © colaboradores do [OpenStreetMap](https://www.openstreetmap.org/copyright); rotas por [OpenRouteService](https://openrouteservice.org/).
