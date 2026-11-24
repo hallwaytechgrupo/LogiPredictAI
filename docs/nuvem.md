@@ -125,8 +125,9 @@ O identificador da primeira hospedagem fica preservado em
 4. Em **Histórico**, confira as taxas regionais observadas.
 5. Importe o CSV de demonstração em **Pedidos** e consulte o pedido importado.
 
-No APK 1.0.1, abra **Conexão com o servidor**, informe a URL HTTPS da API,
-teste e salve. A versão já instalada não precisa usar a rede Wi-Fi do
+O APK 1.0.2 já inclui a URL HTTPS da API como padrão para novas instalações.
+Em aparelhos com um endereço antigo salvo, abra **Conexão com o servidor**,
+informe a URL HTTPS da API, teste e salve. O aplicativo não precisa usar a rede Wi-Fi do
 computador para consultar a nuvem. Ela precisa de conexão com a internet.
 O endereço local salvo anteriormente só muda quando o usuário salva o novo.
 

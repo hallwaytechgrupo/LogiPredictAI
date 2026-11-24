@@ -5,6 +5,29 @@ consulta a mesma API e os mesmos modelos da versão Web. Node.js, Python, banco
 e pesos de ML continuam no computador ou servidor; não são executados dentro
 do celular.
 
+## APK para compartilhar: nuvem e rotas
+
+A versão **1.0.2+3** usa por padrão a API HTTPS publicada e inclui o trajeto
+pelas estradas em **Mapa → Simular**. Em uma instalação nova, basta ter internet;
+o computador do apresentador não precisa ficar ligado. A disponibilidade
+continua sujeita aos créditos dos serviços da nuvem e ao provedor de rotas.
+
+A cópia local para envio fica em
+`reports/local/android/LogiPredictAI-1.0.2-nuvem-rotas.apk`. Envie esse arquivo
+ao Android e permita a instalação pela aplicação usada para recebê-lo, caso
+o sistema solicite. O APK é de demonstração, fora da Play Store.
+
+Uma atualização preserva a conexão salva anteriormente. Se o aparelho ainda
+apontar para USB ou IP local, abra **Conexão com o servidor**, informe
+`https://igors-lima12--logipredict-cloud-api.us-east.modal.run`, teste e salve.
+Não é necessário desinstalar nem apagar os dados do aplicativo.
+
+O build 1.0.2 foi conferido com as ferramentas do Android: versão e pacote
+corretos, assinatura compatível com 1.0.1 e URL da nuvem presente nas três
+arquiteturas. O servidor retornou uma rota SP–RJ de 432,25 km pelo
+OpenRouteService. Esta compilação ainda precisa de conferência física no
+aparelho; a verificação de assinatura e servidor não substitui esse teste.
+
 ## Compilar
 
 Ambiente utilizado: Flutter 3.41.9, Dart 3.11.5, JDK 21, Android SDK 36,
@@ -16,7 +39,7 @@ Na raiz do projeto, em PowerShell:
 ```powershell
 cd flutter_app
 flutter pub get
-flutter build apk --release --dart-define=API_BASE_URL=http://127.0.0.1:3001
+flutter build apk --release --build-name=1.0.2 --build-number=3 --dart-define=API_BASE_URL=https://igors-lima12--logipredict-cloud-api.us-east.modal.run
 ```
 
 O arquivo é gerado em:
@@ -45,7 +68,8 @@ workers para reduzir o consumo simultâneo de memória.
 ## Serviços necessários
 
 No celular, o APK substitui o terceiro terminal que executa o Flutter Web.
-Somente os serviços Python e Node.js precisam continuar ligados no computador.
+Na execução local, os serviços Python e Node.js precisam continuar ligados no computador.
+Usando o endereço da nuvem, esses serviços já estão hospedados remotamente.
 As instruções dos dois serviços estão no [README](../README.md#iniciar-no-vs-code--powershell).
 
 O endereço utilizado pelo celular é o do Node.js, na porta 3001. A comunicação
