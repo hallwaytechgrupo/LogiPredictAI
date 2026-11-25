@@ -492,10 +492,26 @@ router.get('/', async (req, res) => {
     return res.status(422).json({ error: 'INVALID_HUB_ID', message: 'hub_id inválido.' });
   }
 
+  // Filtros da tela Pedidos: com/sem hub e com/sem previsão registrada.
+  const statusFilter = (name) => {
+    const value = req.query[name];
+    if (value === undefined || value === '' || value === 'all') return { value: null };
+    return ['with', 'without'].includes(value) ? { value } : { error: true };
+  };
+  const hubStatus = statusFilter('hub_status');
+  const predictionStatus = statusFilter('prediction_status');
+  if (hubStatus.error || predictionStatus.error) {
+    return res.status(422).json({ error: 'INVALID_FILTER', message: 'Use with, without ou all em hub_status e prediction_status.' });
+  }
+  // Com esses filtros, a paginação é feita depois de filtrar todos os pedidos.
+  const filterAfterFetch = Boolean(hubStatus.value || predictionStatus.value);
+  const fetchPage = filterAfterFetch ? 1 : pageResult.value;
+  const fetchPerPage = filterAfterFetch ? 1000000 : perPageResult.value;
+
   try {
     let result = await listOrders({
-      page: pageResult.value,
-      perPage: perPageResult.value,
+      page: fetchPage,
+      perPage: fetchPerPage,
       hubId: req.query.hub_id?.trim() || null,
       search: req.query.q?.trim() || null,
       source: req.query.source?.trim() || null,
@@ -526,9 +542,9 @@ router.get('/', async (req, res) => {
             filtered = filtered.filter((o) => (o.source || 'operational') === req.query.source.trim());
           }
           const total = filtered.length;
-          const offset = (pageResult.value - 1) * perPageResult.value;
-          const paged = filtered.slice(offset, offset + perPageResult.value);
-          result = { data: paged, total, page: pageResult.value, perPage: perPageResult.value };
+          const offset = (fetchPage - 1) * fetchPerPage;
+          const paged = filtered.slice(offset, offset + fetchPerPage);
+          result = { data: paged, total, page: fetchPage, perPage: fetchPerPage };
         }
       } catch (e) {
         // Se o arquivo existe mas tem JSON inválido, é erro de armazenamento
@@ -540,6 +556,27 @@ router.get('/', async (req, res) => {
         }
         // Outro erro; retornar vazio
       }
+    }
+
+    if (filterAfterFetch) {
+      let filtered = result.data ?? [];
+      if (hubStatus.value) {
+        filtered = filtered.filter((order) => Boolean(order.hub_id) === (hubStatus.value === 'with'));
+      }
+      if (predictionStatus.value) {
+        const history = await req.app.locals.readPredictions();
+        const predicted = new Set((Array.isArray(history) ? history : [])
+          .map((prediction) => prediction?.order_id)
+          .filter(Boolean));
+        filtered = filtered.filter((order) => predicted.has(order.order_id) === (predictionStatus.value === 'with'));
+      }
+      const offset = (pageResult.value - 1) * perPageResult.value;
+      result = {
+        data: filtered.slice(offset, offset + perPageResult.value),
+        total: filtered.length,
+        page: pageResult.value,
+        perPage: perPageResult.value,
+      };
     }
 
     // Enrich with hub info — DB first, then merge with JSON fallback

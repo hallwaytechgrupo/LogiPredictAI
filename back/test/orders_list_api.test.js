@@ -217,3 +217,54 @@ test('GET /api/v1/orders returns 500 on storage error', async (t) => {
   const body = await res.json();
   assert.equal(body.error, 'ORDER_STORAGE_ERROR');
 });
+
+test('GET /api/v1/orders filters by hub and registered prediction before paginating', async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'logipredict-orders-filter-'));
+  const hubsFile = path.join(directory, 'hubs.json');
+  const ordersFile = path.join(directory, 'orders.json');
+  const predictionsFile = path.join(directory, 'predictions.json');
+  const hubId = 'hub-filter-1';
+  await writeFile(hubsFile, JSON.stringify([{
+    id: hubId, code: 'HUB-F1', name: 'Hub Filtro', city: 'Curitiba', state: 'PR',
+    status: 'active', validationStatus: 'APROVADO',
+  }]));
+  const orders = ['A', 'B', 'C', 'D', 'E'].map((id, index) => ({
+    order_id: `filtro-${id}`,
+    hub_id: index < 3 ? hubId : null,
+    source: 'operational',
+  }));
+  await writeFile(ordersFile, JSON.stringify(orders));
+  await writeFile(predictionsFile, JSON.stringify([
+    { order_id: 'filtro-A' }, { order_id: 'filtro-A' }, { order_id: 'filtro-D' },
+  ]));
+
+  const app = await createApp({ hubsFile, ordersFile, predictionsFile });
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once('listening', resolve));
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  t.after(async () => {
+    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    await rm(directory, { recursive: true, force: true });
+  });
+
+  const ids = async (query) => {
+    const res = await fetch(`${baseUrl}/api/v1/orders?source=operational&${query}`);
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    return { ids: body.data.map((order) => order.order_id), total: body.total, pages: body.total_pages };
+  };
+
+  assert.deepEqual((await ids('hub_status=with')).ids, ['filtro-A', 'filtro-B', 'filtro-C']);
+  assert.deepEqual((await ids('hub_status=without')).ids, ['filtro-D', 'filtro-E']);
+  assert.deepEqual((await ids('prediction_status=with')).ids, ['filtro-A', 'filtro-D']);
+  assert.deepEqual((await ids('prediction_status=without')).ids, ['filtro-B', 'filtro-C', 'filtro-E']);
+  assert.deepEqual((await ids('hub_status=all')).total, 5);
+  assert.deepEqual((await ids('hub_status=with&q=b')).ids, ['filtro-B']);
+
+  const firstPage = await ids('hub_status=with&per_page=2&page=1');
+  assert.deepEqual(firstPage, { ids: ['filtro-A', 'filtro-B'], total: 3, pages: 2 });
+  assert.deepEqual((await ids('hub_status=with&per_page=2&page=2')).ids, ['filtro-C']);
+
+  const invalid = await fetch(`${baseUrl}/api/v1/orders?hub_status=talvez`);
+  assert.equal(invalid.status, 422);
+});

@@ -187,12 +187,21 @@ void main() {
       perPage: 20,
       hubId: 'hub-x',
       query: 'order-1',
+      hubStatus: 'without',
+      predictionStatus: 'with',
     );
 
     expect(captured!.url.queryParameters['page'], '2');
     expect(captured!.url.queryParameters['per_page'], '20');
     expect(captured!.url.queryParameters['hub_id'], 'hub-x');
     expect(captured!.url.queryParameters['q'], 'order-1');
+    expect(captured!.url.queryParameters['hub_status'], 'without');
+    expect(captured!.url.queryParameters['prediction_status'], 'with');
+
+    await api.listOrders();
+    expect(captured!.url.queryParameters.containsKey('hub_status'), isFalse);
+    expect(captured!.url.queryParameters.containsKey('prediction_status'),
+        isFalse);
   });
 
   test('listOrders throws on HTTP error', () async {

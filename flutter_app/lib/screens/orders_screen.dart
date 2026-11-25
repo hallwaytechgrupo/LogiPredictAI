@@ -53,6 +53,20 @@ extension _OrderFilterExtension on _OrderFilter {
         return 'Sem previsão';
     }
   }
+
+  /// Valor enviado à API em `hub_status` (null = sem filtro).
+  String? get hubStatus => switch (this) {
+        _OrderFilter.withHub => 'with',
+        _OrderFilter.withoutHub => 'without',
+        _ => null,
+      };
+
+  /// Valor enviado à API em `prediction_status` (null = sem filtro).
+  String? get predictionStatus => switch (this) {
+        _OrderFilter.withPrediction => 'with',
+        _OrderFilter.withoutPrediction => 'without',
+        _ => null,
+      };
 }
 
 class _OrdersScreenState extends State<OrdersScreen> {
@@ -172,6 +186,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
             ? null
             : _searchController.text.trim(),
         source: 'operational',
+        hubStatus: _filter.hubStatus,
+        predictionStatus: _filter.predictionStatus,
       );
       if (!mounted || request != _ordersRequest) return;
       setState(() {
@@ -883,21 +899,32 @@ class _OrdersScreenState extends State<OrdersScreen> {
   }
 
   Widget _buildEmptyState(Color secondaryText) {
+    final filtered = _filter != _OrderFilter.all ||
+        _searchController.text.trim().isNotEmpty;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           const Icon(Icons.inbox_outlined, size: 48, color: Color(0xFF94A3B8)),
           const SizedBox(height: 8),
-          Text('Nenhum pedido operacional',
+          Text(
+              filtered
+                  ? 'Nenhum pedido encontrado'
+                  : 'Nenhum pedido operacional',
               style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: secondaryText)),
           const SizedBox(height: 4),
-          const Text('Importe pedidos via CSV para começar.',
+          Text(
+              !filtered
+                  ? 'Importe pedidos via CSV para começar.'
+                  : _filter == _OrderFilter.all
+                      ? 'Nenhum pedido corresponde à busca informada.'
+                      : 'Nenhum pedido corresponde ao filtro "${_filter.label}"'
+                          '${_searchController.text.trim().isEmpty ? '' : ' e à busca informada'}.',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+              style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
         ],
       ),
     );

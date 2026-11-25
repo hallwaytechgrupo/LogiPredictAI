@@ -80,7 +80,7 @@ Copie `api/.env.example` para `api/.env` se precisar alterar host, porta, endere
 
 ## Listagem de pedidos
 
-`GET /api/v1/orders` retorna os pedidos persistidos, com paginação e filtros opcionais. O CSV operacional é recebido em `POST /api/v1/orders/import-csv` como `{ "csv": "conteúdo do arquivo" }`. A importação por IDs em `/api/v1/orders/import` também está disponível.
+`GET /api/v1/orders` retorna os pedidos persistidos, com paginação e filtros opcionais: `q` (trecho do `order_id`), `hub_id`, `source`, `hub_status` e `prediction_status`. Os dois últimos aceitam `with`, `without` ou `all` (padrão) e filtram pedidos com/sem hub e com/sem previsão registrada antes da paginação, de modo que `total` e `total_pages` refletem o filtro; outro valor retorna 422 `INVALID_FILTER`. O CSV operacional é recebido em `POST /api/v1/orders/import-csv` como `{ "csv": "conteúdo do arquivo" }`. A importação por IDs em `/api/v1/orders/import` também está disponível.
 
 O arquivo `back/data/exemplos_fe04_be02.csv` contém cinco pedidos fictícios para importar pela aba Pedidos. Seus IDs começam com `DEMO-FE04-` e permitem demonstrar FE-04 e BE-02. A importação repetida preserva os pedidos existentes e informa os IDs ignorados.
 

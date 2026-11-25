@@ -146,12 +146,16 @@ class OrdersApi {
   /// [hubId] filtra por hub associado.
   /// [query] filtra por texto contido no order_id.
   /// [source] filtra por origem dos dados (ex: 'operational').
+  /// [hubStatus] e [predictionStatus] aceitam 'with' ou 'without' e filtram
+  /// pedidos com/sem hub e com/sem previsão registrada.
   Future<Map<String, dynamic>> listOrders({
     int page = 1,
     int perPage = 50,
     String? hubId,
     String? query,
     String? source,
+    String? hubStatus,
+    String? predictionStatus,
   }) async {
     final queryParams = <String, String>{
       'page': page.toString(),
@@ -159,6 +163,8 @@ class OrdersApi {
       if (hubId != null) 'hub_id': hubId,
       if (query != null && query.isNotEmpty) 'q': query,
       if (source != null && source.isNotEmpty) 'source': source,
+      if (hubStatus != null) 'hub_status': hubStatus,
+      if (predictionStatus != null) 'prediction_status': predictionStatus,
     };
     final uri = Uri.parse('$_baseUrl/api/v1/orders')
         .replace(queryParameters: queryParams);

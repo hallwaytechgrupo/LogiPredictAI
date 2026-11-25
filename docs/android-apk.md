@@ -7,13 +7,13 @@ do celular.
 
 ## APK para compartilhar: nuvem e rotas
 
-A versão **1.0.4+5** usa por padrão a API HTTPS publicada e inclui o trajeto
+A versão **1.0.5+6** usa por padrão a API HTTPS publicada e inclui o trajeto
 pelas estradas em **Mapa → Simular**. Em uma instalação nova, basta ter internet;
 o computador do apresentador não precisa ficar ligado. A disponibilidade
 continua sujeita aos créditos dos serviços da nuvem e ao provedor de rotas.
 
 A cópia local para envio fica em
-`reports/local/android/LogiPredictAI-1.0.4-nuvem.apk`. Envie esse arquivo
+`reports/local/android/LogiPredictAI-1.0.5-nuvem.apk`. Envie esse arquivo
 ao Android e permita a instalação pela aplicação usada para recebê-lo, caso
 o sistema solicite. O APK é de demonstração, fora da Play Store.
 
@@ -32,6 +32,10 @@ o eixo do gráfico de Análises, a busca de pedidos importados (respostas fora
 de ordem), os blocos do mapa da aba Simular bloqueados pelo OpenStreetMap
 (HTTP 403) e amplia os tempos-limite para o início a frio da nuvem.
 
+A versão 1.0.5 corrige o filtro da tela Pedidos (Com/Sem hub e Com/Sem
+previsão), que antes não era enviado à API, e a mensagem de lista vazia
+quando há filtro ou busca ativa.
+
 ## Compilar
 
 Ambiente utilizado: Flutter 3.41.9, Dart 3.11.5, JDK 21, Android SDK 36,
@@ -43,7 +47,7 @@ Na raiz do projeto, em PowerShell:
 ```powershell
 cd flutter_app
 flutter pub get
-flutter build apk --release --build-name=1.0.4 --build-number=5 --dart-define=API_BASE_URL=https://igors-lima12--logipredict-cloud-api.us-east.modal.run
+flutter build apk --release --build-name=1.0.5 --build-number=6 --dart-define=API_BASE_URL=https://igors-lima12--logipredict-cloud-api.us-east.modal.run
 ```
 
 O arquivo é gerado em:
